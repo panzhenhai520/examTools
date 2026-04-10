@@ -51,8 +51,6 @@
         .cursor-pointer-mode { cursor: default !important; }
         .cursor-pointer-mode svg [cursor="pointer"],
         .cursor-pointer-mode svg [cursor="move"] { cursor: move !important; }
-        
-        /* 核心指示：在选择模式下，悬停在标记字母上时变为四向十字，暗示可以独立拖拽 */
         .cursor-pointer-mode .JXGtext:not(.static-text):not(.snap-label) { cursor: move !important; }
         .cursor-pointer-mode .draggable-text { cursor: move !important; }
         
@@ -107,7 +105,7 @@
     <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center transition-opacity">
         <div class="bg-white rounded-lg p-6 w-80 shadow-2xl transform transition-transform scale-100">
             <h3 class="text-lg font-bold text-gray-800 mb-3">🗑️ 清空画板</h3>
-            <p class="text-gray-600 text-sm mb-6">确定要清空画板上的所有自定义图形吗？此操作将重置整个画布。</p>
+            <p class="text-gray-600 text-sm mb-6">确定要清空画板上的所有自定义图形吗？此操作将不可撤销地重置整个画布。</p>
             <div class="flex justify-end space-x-3">
                 <button onclick="closeConfirmModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition">取消</button>
                 <button onclick="executeClearBoard()" class="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition">确定清空</button>
@@ -134,9 +132,9 @@
         <div class="bg-white rounded-lg p-5 w-96 border border-gray-200">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-md font-bold text-gray-800">🔤 公式编辑器</h3>
-                <span class="text-xs text-blue-600 bg-blue-50 border border-blue-100 px-2 py-1 rounded">🖱️ 智能元素联动激活</span>
+                <span class="text-xs text-blue-600 bg-blue-50 border border-blue-100 px-2 py-1 rounded">🖱️ 智能联动激活</span>
             </div>
-            <p class="text-xs text-gray-500 mb-2">直接点击画板元素自动录入公式。如果点击<b>未标记的角</b>，将自动生成角度扇形并完成公式录入。</p>
+            <p class="text-xs text-gray-500 mb-2">直接点击画板元素自动录入公式。如果点击<b>未标记的角</b>，将自动生成扇形并完成录入。</p>
             <input type="text" id="latex-input" class="w-full border border-gray-300 rounded-md p-3 mb-4 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value="">
             <div class="flex justify-end space-x-3">
                 <button onclick="closePromptModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition">取消</button>
@@ -163,6 +161,11 @@
             <h1 class="text-lg font-bold text-gray-800 mr-2">📐 几何助手</h1>
             
             <div class="flex bg-gray-100 p-1 rounded-lg space-x-1" id="toolbar">
+                <button onclick="undo()" id="btn-undo" class="px-2 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed" title="撤销 (Ctrl+Z)" disabled>↩️</button>
+                <button onclick="redo()" id="btn-redo" class="px-2 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed" title="重做 (Ctrl+Y)" disabled>↪️</button>
+                
+                <div class="h-6 w-px bg-gray-300 mx-1"></div>
+
                 <button onclick="setMode('pointer')" id="btn-pointer" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-white shadow-sm text-blue-600">🖱️ 选择</button>
                 <button onclick="setMode('pan')" id="btn-pan" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🖐️ 漫游</button>
                 
@@ -177,35 +180,34 @@
                 <button onclick="setMode('eraser')" id="btn-eraser" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-red-500 hover:bg-red-50">🧽 擦除</button>
                 
                 <div class="h-6 w-px bg-gray-300 mx-1"></div>
-                <input type="color" id="color-picker" value="#2563eb" class="h-8 w-8 rounded-md cursor-pointer border-0 p-0" title="选择绘制或修改的颜色">
+                <input type="color" id="color-picker" value="#2563eb" class="h-8 w-8 rounded-md cursor-pointer border-0 p-0" title="选择颜色">
                 <button onclick="setMode('color')" id="btn-color" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🎨 改色</button>
             </div>
 
-            <!-- 视图与缩放控制 -->
+            <!-- 视图控制 -->
             <div class="flex items-center space-x-1 ml-2 pl-2 border-l border-gray-300">
-                <button onclick="zoomInBoard()" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm" title="放大画布">➕ 放大</button>
-                <button onclick="zoomOutBoard()" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm" title="缩小画布">➖ 缩小</button>
-                <button onclick="fitBoardToScreen()" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm" title="一键自适应图形居中">🔲 自适应</button>
+                <button onclick="zoomInBoard()" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm" title="放大">➕</button>
+                <button onclick="zoomOutBoard()" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm" title="缩小">➖</button>
+                <button onclick="fitBoardToScreen()" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm" title="适应屏幕">🔲 自适应</button>
                 
                 <div class="h-4 w-px bg-gray-300 mx-1"></div>
                 
                 <button onclick="toggleAxes()" id="btn-toggle-axes" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm">👁️ 坐标</button>
-                <button onclick="togglePoints()" id="btn-toggle-points" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm">👁️ 隐藏点</button>
-                <button onclick="toggleAngles()" id="btn-toggle-angles" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm">👁️ 隐藏角</button>
-                <input type="color" id="bg-color-picker" value="#ffffff" oninput="changeBgColor(this.value)" class="h-6 w-6 rounded-md cursor-pointer border-0 p-0 ml-1" title="背景颜色">
+                <button onclick="togglePoints()" id="btn-toggle-points" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm">👁️ 点</button>
+                <button onclick="toggleAngles()" id="btn-toggle-angles" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm">👁️ 角</button>
             </div>
         </div>
         
         <div class="flex items-center space-x-2">
-            <button onclick="openSettingsModal()" class="px-4 py-1.5 bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 rounded-md text-sm font-medium transition-colors">⚙️ 画板设置</button>
-            <button onclick="requestClearBoard()" class="px-4 py-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-md text-sm font-medium transition-colors">🗑️ 清空画板</button>
+            <button onclick="openSettingsModal()" class="px-4 py-1.5 bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 rounded-md text-sm font-medium transition-colors">⚙️ 设置</button>
+            <button onclick="requestClearBoard()" class="px-4 py-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-md text-sm font-medium transition-colors">🗑️ 清空</button>
         </div>
     </div>
 
     <!-- JSXGraph 画板容器 -->
     <div id="jxgbox" class="flex-grow w-full h-full cursor-pointer-mode" style="background-color: #ffffff;" oncontextmenu="return false;"></div>
 
-    <!-- 底部超极简灰色状态栏 -->
+    <!-- 极简灰色状态栏 -->
     <div id="status-bar" class="bg-gray-50 text-gray-400 text-xs px-4 py-1.5 border-t border-gray-200 text-center tracking-wider z-10 select-none">
         当前模式：选择。拖拽图形内部可平移，拖拽顶点变形，拖拽字母可单独调整文字位置。
     </div>
@@ -221,16 +223,15 @@
         let pendingTextCoords = null;
         
         let snapPreviewPoint = null; 
-        let activeSnapPoint = null;  
         let circlePreviewPoint = null; 
         let circlePreviewObj = null;   
         let circlePreviewRadius = null;
         
-        // 【核心新增：独立字母标签专属拖拽控制变量】
         let activeLabel = null;
         let activeLabelParent = null;
         let activeLabelStartOffset = null;
         let labelDragStartUsr = null;
+        let hasDraggedGraphic = false; 
 
         const angleColors = ['#fca5a5', '#bef264', '#86efac', '#93c5fd', '#c4b5fd', '#f9a8d4', '#fde047'];
         let angleColorIdx = 1;       
@@ -242,6 +243,205 @@
             bbox: [-10, 8, 10, -8] 
         };
 
+        // ================= 【核心引擎：撤销与重做架构设计】 =================
+        let historyStack = [];
+        let historyIndex = -1;
+        let isRestoring = false; 
+        let saveTimeout = null;
+
+        function triggerSave() {
+            if (isRestoring) return;
+            if (saveTimeout) clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => { executeSaveHistory(); }, 50); 
+        }
+
+        // 精准对象序列化
+        function dumpBoardState() {
+            let state = { points: [], lines: [], circles: [], polygons: [], angles: [], texts: [] };
+            
+            for (let id in board.objects) {
+                let el = board.objects[id];
+                if (!el.elType || !el.visProp) continue;
+                
+                let idLower = el.id.toLowerCase();
+                // 彻底隔离坐标轴、网格线和系统自带鼠标气泡 (infobox)
+                if (idLower.indexOf('ticks') > -1 || idLower.indexOf('axes') > -1 || idLower.indexOf('grid') > -1 || idLower.indexOf('infobox') > -1) continue;
+                if (el === snapPreviewPoint || el === circlePreviewPoint || el === circlePreviewObj || el === circlePreviewRadius) continue;
+
+                if (el.elType === 'point') {
+                    state.points.push({
+                        oldId: el.id, name: el.name, coords: [el.X(), el.Y()], color: el.visProp.fillcolor, size: el.visProp.size,
+                        visible: el.visProp.visible, labelOffset: (el.label && el.label.visProp && el.label.visProp.offset) ? [...el.label.visProp.offset] : [15, 15]
+                    });
+                }
+            }
+            
+            for (let id in board.objects) {
+                let el = board.objects[id];
+                if (!el.elType || !el.visProp) continue;
+                let idLower = el.id.toLowerCase();
+                if (idLower.indexOf('ticks') > -1 || idLower.indexOf('axes') > -1 || idLower.indexOf('grid') > -1 || idLower.indexOf('infobox') > -1) continue;
+                if (el === snapPreviewPoint || el === circlePreviewPoint || el === circlePreviewObj || el === circlePreviewRadius) continue;
+
+                let isBorder = false;
+                for (let pId in board.objects) {
+                    if (board.objects[pId].elType === 'polygon' && board.objects[pId].borders && board.objects[pId].borders.includes(el)) isBorder = true;
+                }
+                if (isBorder) continue;
+
+                if (el.elType === 'segment' || el.elType === 'line') {
+                    if(el.point1 && el.point2) {
+                        state.lines.push({ 
+                            oldId: el.id, type: el.elType, p1: el.point1.id, p2: el.point2.id, 
+                            color: el.visProp.strokecolor, dash: el.visProp.dash,
+                            straightFirst: el.visProp.straightfirst, straightLast: el.visProp.straightlast
+                        });
+                    }
+                } else if (el.elType === 'circle') {
+                    if(el.center && el.point2) {
+                        state.circles.push({ oldId: el.id, center: el.center.id, p2: el.point2.id, color: el.visProp.strokecolor, fillColor: el.visProp.fillcolor, fillOpacity: el.visProp.fillopacity });
+                    }
+                } else if (el.elType === 'polygon') {
+                    let strokeColor = '#b91c1c';
+                    if (el.borders && el.borders[0] && el.borders[0].visProp) {
+                        strokeColor = el.borders[0].visProp.strokecolor;
+                    }
+                    state.polygons.push({ oldId: el.id, vertices: el.vertices.slice(0, -1).map(v => v.id), color: el.visProp.fillcolor, strokeColor: strokeColor });
+                } else if (el.elType === 'angle') {
+                    if(el.point1 && el.point2 && el.point3) {
+                        state.angles.push({ oldId: el.id, p1: el.point1.id, p2: el.point2.id, p3: el.point3.id, vertexPoint: el.vertexPoint ? el.vertexPoint.id : el.point2.id, customLabel: el.customLabel || '', color: el.visProp.fillcolor, visible: el.visProp.visible });
+                    }
+                } else if (el.elType === 'text') {
+                    if (el.isLabel) continue; 
+                    let isLabelForSomeone = false;
+                    for (let pid in board.objects) {
+                        if (board.objects[pid].label === el) { isLabelForSomeone = true; break; }
+                    }
+                    if (isLabelForSomeone) continue;
+
+                    state.texts.push({ oldId: el.id, coords: [el.X(), el.Y()], text: el.plaintext || el.text, cssClass: el.visProp.cssclass || '', fixed: el.visProp.fixed });
+                }
+            }
+            return state;
+        }
+
+        function executeSaveHistory() {
+            if (isRestoring) return;
+            if (snapPreviewPoint) { snapPreviewPoint.moveTo([9999, 9999]); board.update(); }
+            
+            if (historyIndex < historyStack.length - 1) {
+                historyStack = historyStack.slice(0, historyIndex + 1);
+            }
+            
+            let stateData = dumpBoardState();
+            
+            historyStack.push({
+                data: stateData,
+                pointCharCode: pointCharCode,
+                angleColorIdx: angleColorIdx,
+                bbox: board.getBoundingBox() 
+            });
+            historyIndex++;
+            updateUndoRedoButtons();
+        }
+
+        function undo() {
+            if (historyIndex > 0 && !isRestoring) {
+                historyIndex--;
+                restoreState(historyStack[historyIndex]);
+            }
+        }
+
+        function redo() {
+            if (historyIndex < historyStack.length - 1 && !isRestoring) {
+                historyIndex++;
+                restoreState(historyStack[historyIndex]);
+            }
+        }
+
+        function updateUndoRedoButtons() {
+            document.getElementById('btn-undo').disabled = (historyIndex <= 0);
+            document.getElementById('btn-redo').disabled = (historyIndex >= historyStack.length - 1);
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+                if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+            }
+        });
+
+        function restoreState(state) {
+            isRestoring = true;
+            
+            JXG.JSXGraph.freeBoard(board);
+            document.getElementById('jxgbox').innerHTML = '';
+            clickPoints = []; tempLines = []; circlePreviewObj = null; circlePreviewPoint = null; circlePreviewRadius = null; snapPreviewPoint = null;
+            activeLabel = null; activeLabelParent = null;
+            
+            initBoardCore();
+            board.setBoundingBox(state.bbox, true);
+            
+            let idMap = {};
+            state.data.points.forEach(p => {
+                let newP = board.create('point', p.coords, { name: p.name, fillColor: p.color, strokeColor: 'white', size: p.size || 4, visible: p.visible, withLabel: p.name !== '', label: { offset: p.labelOffset } });
+                idMap[p.oldId] = newP;
+            });
+            
+            state.data.polygons.forEach(p => {
+                let pts = p.vertices.map(vId => idMap[vId]).filter(x=>x);
+                if (pts.length > 0) {
+                    // 【高亮修复】：面不高亮，但允许边缘高亮！
+                    let poly = board.create('polygon', pts, { 
+                        fillColor: p.color, fillOpacity: 0.6, hasInnerPoints: true, 
+                        highlightFillColor: p.color, highlightFillOpacity: 0.6,
+                        borders: { strokeColor: p.strokeColor, strokeWidth: 2, fixed: true } 
+                    });
+                    idMap[p.oldId] = poly;
+                }
+            });
+            
+            state.data.lines.forEach(l => {
+                let p1 = idMap[l.p1], p2 = idMap[l.p2];
+                if (p1 && p2) {
+                    // 恢复线段时不强制关闭 highlight，允许其受鼠标感应
+                    let newLine = board.create(l.type, [p1, p2], { 
+                        strokeColor: l.color, strokeWidth: (l.type==='line'||l.type==='segment')?2:1, 
+                        dash: l.dash, straightFirst: l.straightFirst, straightLast: l.straightLast
+                    });
+                    idMap[l.oldId] = newLine;
+                }
+            });
+            
+            state.data.circles.forEach(c => {
+                let p1 = idMap[c.center], p2 = idMap[c.p2];
+                if (p1 && p2) {
+                    let circ = board.create('circle', [p1, p2], { strokeWidth: 2, strokeColor: c.color, fillColor: c.fillColor, fillOpacity: c.fillOpacity });
+                    idMap[c.oldId] = circ;
+                }
+            });
+            
+            state.data.angles.forEach(a => {
+                let p1 = idMap[a.p1], p2 = idMap[a.p2], p3 = idMap[a.p3];
+                let vp = idMap[a.vertexPoint] || p2; 
+                if (p1 && p2 && p3) {
+                    let ang = board.create('angle', [p1, p2, p3], { name: '', withLabel: false, radius: 0.5, fillColor: a.color, strokeColor: a.color, visible: a.visible });
+                    ang.customLabel = a.customLabel; ang.vertexPoint = vp;
+                    idMap[a.oldId] = ang;
+                }
+            });
+            
+            state.data.texts.forEach(t => {
+                board.create('text', [t.coords[0], t.coords[1], t.text], { fontSize: t.cssClass.includes('static-text') ? 16 : 18, useMathJax: true, needsRegularUpdate: false, fixed: t.fixed, cssClass: t.cssClass });
+            });
+            
+            pointCharCode = state.pointCharCode; angleColorIdx = state.angleColorIdx;
+            
+            recreatePreviewSystem(); bindBoardEvents(); board.update(); setMode(currentMode); 
+            isRestoring = false; updateUndoRedoButtons();
+        }
+
         window.onload = function() {
             function checkReady() {
                 if (typeof JXG === 'undefined') {
@@ -250,30 +450,68 @@
                 }
                 if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
                     window.MathJax.startup.promise.then(() => {
-                        initBoard(); drawInitialShapes();
-                    }).catch(() => {
-                        initBoard(); drawInitialShapes();
-                    });
+                        startupApp();
+                    }).catch(() => { startupApp(); });
                 } else {
-                    initBoard(); drawInitialShapes();
-                }
-                
-                let inputEl = document.getElementById('latex-input');
-                if (inputEl) {
-                    inputEl.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') executeAddText();
-                    });
-                }
-                
-                let genInput = document.getElementById('generic-input');
-                if (genInput) {
-                    genInput.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') submitGenericModal();
-                    });
+                    startupApp();
                 }
             }
             checkReady();
+            
+            let inputEl = document.getElementById('latex-input');
+            if (inputEl) inputEl.addEventListener('keypress', function(e) { if (e.key === 'Enter') executeAddText(); });
+            let genInput = document.getElementById('generic-input');
+            if (genInput) genInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') submitGenericModal(); });
         };
+
+        function startupApp() {
+            initBoardCore();
+            recreatePreviewSystem();
+            bindBoardEvents();
+            drawInitialShapes();
+            
+            setTimeout(() => { executeSaveHistory(); }, 200);
+        }
+
+        function initBoardCore() {
+            // 【全面净化】：直接从全局关掉原生的点坐标气泡！
+            JXG.Options.point.showInfobox = false;
+
+            board = JXG.JSXGraph.initBoard('jxgbox', { 
+                boundingbox: globalBoardSettings.bbox, 
+                axis: true, 
+                defaultAxes: {
+                    x: { ticks: { ticksDistance: globalBoardSettings.tickDistance, insertTicks: false } },
+                    y: { ticks: { ticksDistance: globalBoardSettings.tickDistance, insertTicks: false } }
+                },
+                grid: true, showCopyright: false, showNavigation: true, keepaspectratio: true,
+                selection: { enabled: true, needShift: true, needCtrl: false },
+                pan: { enabled: false, needTwoFingers: false, needShift: false },
+                zoom: { factorX: 1.25, factorY: 1.25, wheel: true, needShift: false }
+            });
+            toggleAxesSilent(isAxesVisible);
+        }
+
+        function toggleAxesSilent(visible) {
+            if (board.defaultAxes) {
+                if (board.defaultAxes.x) board.defaultAxes.x.setAttribute({visible: visible});
+                if (board.defaultAxes.y) board.defaultAxes.y.setAttribute({visible: visible});
+            }
+            if (board.grids) {
+                for (let i = 0; i < board.grids.length; i++) board.grids[i].setAttribute({visible: visible});
+            }
+        }
+
+        function recreatePreviewSystem() {
+            if (!snapPreviewPoint) {
+                // 【修复：比例标签防失效】 name不能是空字符串，必须是空格，才能迫使引擎稳定生成文本图层
+                snapPreviewPoint = board.create('point', [9999, 9999], {
+                    visible: true, size: 5, fillColor: '#f59e0b', strokeColor: '#ffffff', strokeWidth: 2,
+                    name: ' ', withLabel: true, fixed: true, layer: 10,
+                    label: { offset: [12, 15], useMathJax: false, cssClass: 'snap-label' }
+                });
+            }
+        }
 
         function zoomInBoard() { if (board) board.zoomIn(); }
         function zoomOutBoard() { if (board) board.zoomOut(); }
@@ -403,54 +641,36 @@
             return null;
         }
 
-        function initBoard() {
-            board = JXG.JSXGraph.initBoard('jxgbox', { 
-                boundingbox: globalBoardSettings.bbox, 
-                axis: true, 
-                defaultAxes: {
-                    x: { ticks: { ticksDistance: globalBoardSettings.tickDistance, insertTicks: false } },
-                    y: { ticks: { ticksDistance: globalBoardSettings.tickDistance, insertTicks: false } }
-                },
-                grid: true, 
-                showCopyright: false, 
-                showNavigation: true, 
-                keepaspectratio: true,
-                selection: { enabled: true, needShift: true, needCtrl: false },
-                
-                pan: { enabled: false, needTwoFingers: false, needShift: false },
-                zoom: { factorX: 1.25, factorY: 1.25, wheel: true, needShift: false }
-            });
-
-            snapPreviewPoint = board.create('point', [9999, 9999], {
-                visible: true, size: 5, fillColor: '#f59e0b', strokeColor: '#ffffff', strokeWidth: 2,
-                name: '', withLabel: true, fixed: true, layer: 10,
-                label: { offset: [12, 15], useMathJax: false, cssClass: 'snap-label' }
-            });
-
+        function bindBoardEvents() {
             board.on('move', function(e) {
                 let coords = board.getUsrCoordsOfMouse(e);
                 let mouseX = coords[0], mouseY = coords[1]; 
 
-                // 【核心逻辑：标签隔离拖移算法】
-                // 接管标签移动，将其转化为偏移量，同时不动摇实体
                 if (currentMode === 'pointer' && activeLabel && activeLabelParent) {
                     let dx = mouseX - labelDragStartUsr[0];
                     let dy = mouseY - labelDragStartUsr[1];
                     let px = dx * board.unitX;
-                    // 【修正】：由于屏幕坐标系Y轴向下，而用户坐标系Y向上，此处抵消使得随手移动视觉相符
                     let py = -dy * board.unitY; 
                     
                     activeLabel.setAttribute({
                         offset: [activeLabelStartOffset[0] + px, activeLabelStartOffset[1] + py]
                     });
+                    hasDraggedGraphic = true; 
                     board.update();
                     return;
+                }
+
+                if (currentMode === 'pointer') {
+                    if (board.mouse && board.mouse.obj) {
+                        hasDraggedGraphic = true;
+                    }
                 }
 
                 if (currentMode === 'circle' && clickPoints.length === 1) {
                     if (!circlePreviewPoint) {
                         circlePreviewPoint = board.create('point', [mouseX, mouseY], {visible: false});
                         circlePreviewRadius = board.create('segment', [clickPoints[0], circlePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#6b7280'});
+                        // 预览圆去除高亮屏蔽，让它能正常感应
                         circlePreviewObj = board.create('circle', [clickPoints[0], circlePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#9ca3af', fillColor: 'none'});
                     } else {
                         circlePreviewPoint.moveTo([mouseX, mouseY]);
@@ -459,13 +679,11 @@
                 }
 
                 if (currentMode !== 'point') {
-                    snapPreviewPoint.moveTo([9999, 9999]); 
-                    activeSnapPoint = null;
+                    if (snapPreviewPoint) snapPreviewPoint.moveTo([9999, 9999]); 
                     return;
                 }
 
                 let closestSegment = null, minDistance = 0.8, bestT = -1;
-
                 for (let id in board.objects) {
                     let el = board.objects[id];
                     if ((el.elType === 'line' || el.elType === 'segment') && el.point1 && el.point2) {
@@ -488,50 +706,48 @@
                 if (closestSegment) {
                     let p1 = closestSegment.point1, p2 = closestSegment.point2;
                     let length = Math.hypot(p2.X() - p1.X(), p2.Y() - p1.Y());
+                    
+                    // 【精细化找回短长比例公式】
                     let shortRatio = Math.min(bestT, 1 - bestT);
                     let bestFraction = null, snapT = bestT; 
-                    
-                    const fractions = [
-                        {t: 1/2, label: '1/2'}, {t: 1/3, label: '1/3'}, {t: 2/3, label: '1/3'}, 
-                        {t: 1/4, label: '1/4'}, {t: 3/4, label: '1/4'},
-                        {t: 1/5, label: '1/5'}, {t: 4/5, label: '1/5'}, {t: 2/5, label: '2/5'}, {t: 3/5, label: '2/5'}
-                    ];
+                    const fractions = [{t: 1/2, label: '1/2'}, {t: 1/3, label: '1/3'}, {t: 2/3, label: '1/3'}, {t: 1/4, label: '1/4'}, {t: 3/4, label: '1/4'}, {t: 1/5, label: '1/5'}, {t: 4/5, label: '1/5'}, {t: 2/5, label: '2/5'}, {t: 3/5, label: '2/5'}];
                     let snapTolerance = 0.8 / length; 
                     
                     for (let f of fractions) {
-                        if (Math.abs(bestT - f.t) < snapTolerance) {
-                            bestFraction = f; snapT = f.t; break;
-                        }
+                        if (Math.abs(bestT - f.t) < snapTolerance) { bestFraction = f; snapT = f.t; break; }
                     }
                     
                     let displayLabel = bestFraction ? ('短/总 = ' + bestFraction.label) : ('短/总 ≈ ' + shortRatio.toFixed(2));
                     let snapX = p1.X() + snapT * (p2.X() - p1.X()), snapY = p1.Y() + snapT * (p2.Y() - p1.Y());
-                    activeSnapPoint = [snapX, snapY];
                     
-                    snapPreviewPoint.moveTo([snapX, snapY]);
-                    snapPreviewPoint.name = displayLabel;
-                    if (snapPreviewPoint.label) snapPreviewPoint.label.setText(displayLabel);
+                    if (snapPreviewPoint) {
+                        snapPreviewPoint.moveTo([snapX, snapY]);
+                        snapPreviewPoint.name = displayLabel;
+                        // 强制通过setText写入使得底层引擎必刷新
+                        if (snapPreviewPoint.label) snapPreviewPoint.label.setText(displayLabel);
+                        board.update(); 
+                    }
                 } else {
-                    snapPreviewPoint.moveTo([9999, 9999]);
-                    activeSnapPoint = null;
+                    if (snapPreviewPoint) { snapPreviewPoint.moveTo([9999, 9999]); board.update(); }
                 }
             });
 
             board.on('down', function(e) {
+                hasDraggedGraphic = false; 
+                
                 if (e.button === 2) {
                     let els = board.getAllObjectsUnderMouse(e);
                     let targetTypes = ['line', 'segment', 'circle', 'angle'];
                     let target = els.find(el => targetTypes.includes(el.elType) && el.visProp.visible);
-                    
                     if (target) {
                         let currentDash = target.visProp.dash || 0;
                         target.setAttribute({dash: currentDash === 0 ? 2 : 0});
                         board.update();
+                        triggerSave(); 
                     }
                     return; 
                 }
 
-                // 【核心隔离判定：严格判定鼠标是否真正点击在文字的 HTML/SVG 节点内部】
                 if (currentMode === 'pointer') {
                     let els = board.getAllObjectsUnderMouse(e);
                     let targetNode = e.target || e.srcElement;
@@ -541,16 +757,13 @@
                         let el = els[i];
                         let cssStr = (el.visProp.cssclass || el.visProp.cssClass || '');
                         if (el.elType === 'text' && !cssStr.includes('static-text') && !cssStr.includes('snap-label')) {
-                            // DOM 包含关系进行绝对精确的点击命中测试
                             if (el.rendNode && el.rendNode.contains(targetNode)) {
-                                textEl = el;
-                                break;
+                                textEl = el; break;
                             }
                         }
                     }
                     
                     if (textEl) {
-                        // 寻找它的宿主实体（通常是点、角等）
                         let parent = Object.values(board.objects).find(obj => obj.label === textEl);
                         if (!parent && textEl.parent) parent = textEl.parent; 
                         
@@ -559,18 +772,12 @@
                             activeLabelParent = parent;
                             labelDragStartUsr = board.getUsrCoordsOfMouse(e);
                             activeLabelStartOffset = [...activeLabel.visProp.offset];
-                            
-                            // 【最核心】：瞬间将宿主实体冻结，斩断默认底层连带拖拽！
                             parent.setAttribute({fixed: true});
                             if (board.mouse) board.mouse.obj = null;
                             board.dehighlightAll();
-                            
-                            return; // 成功命中符号拦截，后续放行逻辑不再执行实体拖拽
+                            return; 
                         }
                     }
-                    
-                    // 【终极修复】：在选择模式下，如果没点中任何标签，必须直接返回拦截！
-                    // 绝不允许代码往下“漏”到画点的分支，彻底解决“拖拽时多出一个点”的Bug！
                     return; 
                 }
 
@@ -589,28 +796,18 @@
 
                 let promptModal = document.getElementById('prompt-modal');
                 if (!promptModal.classList.contains('hidden')) {
-                    
                     let targetAngle = null, minAngDist = 1.5; 
-                    
                     for (let id in board.objects) {
                         let obj = board.objects[id];
-                        if (obj.elType === 'angle' && obj.visProp.visible) {
-                            let v = obj.vertexPoint; 
-                            if (v) {
-                                let dist = Math.hypot(actualClickCoords[0] - v.X(), actualClickCoords[1] - v.Y());
-                                if (dist < minAngDist) {
-                                    minAngDist = dist; targetAngle = obj; 
-                                }
-                            }
+                        if (obj.elType === 'angle' && obj.visProp.visible && obj.vertexPoint) {
+                            let dist = Math.hypot(actualClickCoords[0] - obj.vertexPoint.X(), actualClickCoords[1] - obj.vertexPoint.Y());
+                            if (dist < minAngDist) { minAngDist = dist; targetAngle = obj; }
                         }
                     }
-
                     if (targetAngle) {
-                        let aName = targetAngle.customLabel || (targetAngle.vertexPoint ? targetAngle.vertexPoint.name : '');
-                        let insertStr = '\\angle ' + aName;
-                        let inputEl = document.getElementById('latex-input');
-                        inputEl.value += insertStr;
-                        inputEl.focus();
+                        let aName = targetAngle.customLabel || targetAngle.vertexPoint.name || '';
+                        document.getElementById('latex-input').value += '\\angle ' + aName;
+                        document.getElementById('latex-input').focus();
                         return;
                     } 
                     
@@ -625,30 +822,23 @@
                             }
                         }
                     }
-                    
                     if (potentialVertex) {
                         let anglePts = getAnglePointsFromVertex(potentialVertex, actualClickCoords);
                         if (anglePts) {
-                            openGenericModal("智能标角并拾取", "检测到未标记的角，请输入名称 (如 B, 2)\n确认后将自动绘制并在公式中引用该角", potentialVertex.name || "", function(val) {
+                            openGenericModal("智能标角并拾取", "检测到未标记的角，请输入名称", potentialVertex.name || "", function(val) {
                                 let trimVal = val.trim();
                                 if (trimVal && isAngleNameDuplicate(trimVal, null)) {
-                                    showGenericError('⚠️ 该角名称已存在，请使用其他名称！');
-                                    return false; 
+                                    showGenericError('⚠️ 该角名称已存在！'); return false; 
                                 }
-                                let color = angleColors[angleColorIdx % angleColors.length];
-                                angleColorIdx++;
+                                let color = angleColors[angleColorIdx % angleColors.length]; angleColorIdx++;
                                 let ang = board.create('angle', [anglePts.p1, potentialVertex, anglePts.p2], {
-                                    name: '', withLabel: false, 
-                                    radius: 1.5, fillColor: color, strokeColor: color, visible: isAnglesVisible
+                                    name: '', withLabel: false, radius: 0.5, fillColor: color, strokeColor: color, visible: isAnglesVisible
                                 });
-                                ang.customLabel = trimVal || potentialVertex.name || '';
-                                ang.vertexPoint = potentialVertex; 
+                                ang.customLabel = trimVal || potentialVertex.name || ''; ang.vertexPoint = potentialVertex; 
                                 board.update();
-
-                                let insertStr = '\\angle ' + ang.customLabel;
-                                let inputEl = document.getElementById('latex-input');
-                                inputEl.value += insertStr;
-                                inputEl.focus();
+                                document.getElementById('latex-input').value += '\\angle ' + ang.customLabel;
+                                document.getElementById('latex-input').focus();
+                                triggerSave(); 
                                 return true;
                             });
                             return; 
@@ -657,24 +847,12 @@
                     
                     let target = els.find(el => ['segment', 'line'].includes(el.elType)) || els.find(el => el.elType === 'point');
                     if (!target && els[0] && els[0].elType !== 'text') target = els[0];
-                    
                     if (target) {
                         let insertStr = '';
-                        if (target.elType === 'line' || target.elType === 'segment') {
-                            let n1 = target.point1 ? target.point1.name : '';
-                            let n2 = target.point2 ? target.point2.name : '';
-                            insertStr = n1 + n2;
-                        } else if (target.elType === 'point') {
-                            insertStr = target.name;
-                        }
-                        if (insertStr) {
-                            let inputEl = document.getElementById('latex-input');
-                            inputEl.value += insertStr;
-                            inputEl.focus();
-                            return; 
-                        }
+                        if (target.elType === 'line' || target.elType === 'segment') insertStr = (target.point1 ? target.point1.name : '') + (target.point2 ? target.point2.name : '');
+                        else if (target.elType === 'point') insertStr = target.name;
+                        if (insertStr) { document.getElementById('latex-input').value += insertStr; document.getElementById('latex-input').focus(); return; }
                     }
-
                     pendingTextCoords = actualClickCoords;
                     return; 
                 }
@@ -688,16 +866,13 @@
                             if (d < minAngDist) { minAngDist = d; targetAngle = el; }
                         }
                     }
-                    
                     if (targetAngle) {
-                        openGenericModal("重新标记角度", "请输入新的角名字 (如 1, 2, A)\n将更新原有的名称并用于公式拾取", targetAngle.customLabel || "", function(val) {
+                        openGenericModal("重新标记角度", "请输入新的角名字", targetAngle.customLabel || "", function(val) {
                             let trimVal = val.trim();
-                            if (trimVal && isAngleNameDuplicate(trimVal, targetAngle.id)) {
-                                showGenericError('⚠️ 该角名称已存在，请更换！');
-                                return false;
-                            }
+                            if (trimVal && isAngleNameDuplicate(trimVal, targetAngle.id)) { showGenericError('⚠️ 该角名称已存在！'); return false; }
                             targetAngle.customLabel = trimVal || targetAngle.vertexPoint.name || '';
                             board.update();
+                            triggerSave(); 
                             return true;
                         });
                         return;
@@ -714,25 +889,19 @@
                             }
                         }
                     }
-
                     if (v) {
                         let anglePts = getAnglePointsFromVertex(v, actualClickCoords);
                         if (anglePts) {
-                            openGenericModal("标记角度", "请输入角的名字 (如 1, 2, A)\n该名称将用于公式拾取，画板上仅显示弧线", v.name || "", function(val) {
+                            openGenericModal("标记角度", "请输入角的名字", v.name || "", function(val) {
                                 let trimVal = val.trim();
-                                if (trimVal && isAngleNameDuplicate(trimVal, null)) {
-                                    showGenericError('⚠️ 该角名称已存在，请使用其他名称！');
-                                    return false;
-                                }
-                                let color = angleColors[angleColorIdx % angleColors.length];
-                                angleColorIdx++;
+                                if (trimVal && isAngleNameDuplicate(trimVal, null)) { showGenericError('⚠️ 该角名称已存在！'); return false; }
+                                let color = angleColors[angleColorIdx % angleColors.length]; angleColorIdx++;
                                 let ang = board.create('angle', [anglePts.p1, v, anglePts.p2], {
-                                    name: '', withLabel: false, 
-                                    radius: 1.5, fillColor: color, strokeColor: color, visible: isAnglesVisible
+                                    name: '', withLabel: false, radius: 0.5, fillColor: color, strokeColor: color, visible: isAnglesVisible
                                 });
-                                ang.customLabel = trimVal || v.name || '';
-                                ang.vertexPoint = v; 
+                                ang.customLabel = trimVal || v.name || ''; ang.vertexPoint = v; 
                                 board.update();
+                                triggerSave(); 
                                 return true;
                             });
                         }
@@ -745,40 +914,34 @@
                         let selectedColor = document.getElementById('color-picker').value;
                         let target = els.find(el => el.elType !== 'point') || els[0];
                         target.setAttribute({strokeColor: selectedColor});
-                        if (target.hasPoint || target.elType === 'angle' || target.elType === 'circle') {
-                            target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
-                        }
+                        if (target.hasPoint || target.elType === 'angle' || target.elType === 'circle') target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
                         board.update();
+                        triggerSave(); 
                     }
                     return; 
                 }
                 else if (currentMode === 'eraser') {
                     if (els.length > 0) {
                         const targetTypes = ['point', 'line', 'segment', 'circle', 'polygon', 'angle', 'text', 'midpoint'];
-                        let validTargets = els.filter(el => 
-                            targetTypes.includes(el.elType) && el !== snapPreviewPoint && el !== circlePreviewPoint && 
-                            el.visProp.visible && !(el.id.includes('ticks') || el.id.includes('Axes'))
-                        );
-
+                        let validTargets = els.filter(el => targetTypes.includes(el.elType) && el !== snapPreviewPoint && el !== circlePreviewPoint && el.visProp.visible && !(el.id.includes('ticks') || el.id.includes('Axes')));
                         if (validTargets.length === 1) {
                             board.removeObject(validTargets[0]); board.update();
+                            triggerSave(); 
                         } else if (validTargets.length > 1) {
                             let items = validTargets.map(el => {
                                 let desc = '未知元素';
                                 if (el.elType === 'point') desc = '点 ' + (el.name || '');
-                                else if (el.elType === 'segment') desc = '线段 ' + ((el.point1 && el.point1.name) || '') + ((el.point2 && el.point2.name) || '');
-                                else if (el.elType === 'line') desc = '直线 ' + ((el.point1 && el.point1.name) || '') + ((el.point2 && el.point2.name) || '');
+                                else if (el.elType === 'segment') desc = '线段';
+                                else if (el.elType === 'line') desc = '直线';
                                 else if (el.elType === 'polygon') desc = '多边形';
                                 else if (el.elType === 'angle') desc = '角 ' + (el.customLabel || '');
                                 else if (el.elType === 'circle') desc = '圆';
                                 else if (el.elType === 'text') desc = '文本/公式';
                                 return { id: el.id, desc: desc, obj: el };
                             });
-                            
                             let uniqueItems = [], seen = new Set();
                             items.forEach(item => { if (!seen.has(item.id)) { seen.add(item.id); uniqueItems.push(item); } });
-                            
-                            if (uniqueItems.length === 1) { board.removeObject(uniqueItems[0].obj); board.update(); } 
+                            if (uniqueItems.length === 1) { board.removeObject(uniqueItems[0].obj); board.update(); triggerSave(); } 
                             else if (uniqueItems.length > 1) { openEraserModal(uniqueItems); }
                         }
                     }
@@ -786,16 +949,12 @@
                 }
                 else if (currentMode === 'point') {
                     if (!isPointUnderMouse) {
-                        let finalCoords = activeSnapPoint ? [activeSnapPoint[0], activeSnapPoint[1]] : actualClickCoords;
-                        openGenericModal("命名控制点", "请输入点的字母 (如 P, M)\n留空则不显示名称", String.fromCharCode(pointCharCode), function(val) {
-                            let nameToUse = val.trim().toUpperCase();
-                            updatePointCharCode(nameToUse);
-                            board.create('point', finalCoords, { 
-                                size: 4, name: nameToUse, fillColor: '#ef4444', strokeColor: 'white', 
-                                visible: isPointsVisible, withLabel: nameToUse !== '',
-                                label: { offset: [15, 15] } 
-                            });
-                            snapPreviewPoint.moveTo([9999, 9999]); board.update();
+                        let finalCoords = (snapPreviewPoint && snapPreviewPoint.X() !== 9999) ? [snapPreviewPoint.X(), snapPreviewPoint.Y()] : actualClickCoords;
+                        openGenericModal("命名控制点", "请输入点的字母", String.fromCharCode(pointCharCode), function(val) {
+                            let nameToUse = val.trim().toUpperCase(); updatePointCharCode(nameToUse);
+                            board.create('point', finalCoords, { size: 4, name: nameToUse, fillColor: '#ef4444', strokeColor: 'white', visible: isPointsVisible, withLabel: nameToUse !== '', label: { offset: [15, 15] } });
+                            if (snapPreviewPoint) { snapPreviewPoint.moveTo([9999, 9999]); board.update(); }
+                            triggerSave(); 
                             return true;
                         });
                     }
@@ -803,8 +962,7 @@
                 else if (currentMode === 'text') {
                     pendingTextCoords = actualClickCoords;
                     document.getElementById('prompt-modal').classList.remove('hidden');
-                    let inputField = document.getElementById('latex-input');
-                    inputField.value = ''; 
+                    let inputField = document.getElementById('latex-input'); inputField.value = ''; 
                     setTimeout(() => { inputField.focus(); }, 50); 
                 }
                 else {
@@ -813,22 +971,20 @@
                         p = clickedPoint; 
                         if (currentMode === 'polygon' && clickPoints.length >= 2 && p === clickPoints[0]) {
                             let selectedColor = document.getElementById('color-picker').value;
+                            // 多边形面不高亮，但允许其受到点击抓取
                             board.create('polygon', clickPoints, {
-                                fillColor: selectedColor, fillOpacity: 0.2, hasInnerPoints: true,
+                                fillColor: selectedColor, fillOpacity: 0.2, hasInnerPoints: true, highlightFillColor: selectedColor, highlightFillOpacity: 0.2, 
                                 borders: { strokeColor: selectedColor, strokeWidth: 2, fixed: true }
                             });
-                            tempLines.forEach(line => board.removeObject(line));
-                            tempLines = []; clickPoints = [];
+                            tempLines.forEach(line => board.removeObject(line)); tempLines = []; clickPoints = [];
+                            triggerSave(); 
                             return; 
                         }
                     } else {
                         let isCircleCenter = (currentMode === 'circle' && clickPoints.length === 0);
                         let autoName = getNextAutoPointName(isCircleCenter);
-                        p = board.create('point', actualClickCoords, { 
-                            size: 3, name: autoName, fillColor: '#3b82f6', 
-                            visible: isPointsVisible, withLabel: true,
-                            label: { offset: [15, 15] } 
-                        });
+                        p = board.create('point', actualClickCoords, { size: 3, name: autoName, fillColor: '#3b82f6', visible: isPointsVisible, withLabel: true, label: { offset: [15, 15] } });
+                        if(currentMode !== 'circle' && currentMode !== 'line' && currentMode !== 'polygon') triggerSave();
                     }
                     clickPoints.push(p);
 
@@ -839,31 +995,37 @@
 
                     if (currentMode === 'line' && clickPoints.length === 2) {
                         let selectedColor = document.getElementById('color-picker').value;
-                        board.create('line', [clickPoints[0], clickPoints[1]], { straightFirst: false, straightLast: false, strokeWidth: 2, strokeColor: selectedColor });
+                        // 取消 highlight: false，让线段能够高亮！
+                        board.create('segment', [clickPoints[0], clickPoints[1]], { strokeWidth: 2, strokeColor: selectedColor });
                         clickPoints = [];
+                        triggerSave(); 
                     }
                     else if (currentMode === 'circle' && clickPoints.length === 2) {
                         let selectedColor = document.getElementById('color-picker').value;
                         board.removeObject(circlePreviewObj); board.removeObject(circlePreviewRadius); board.removeObject(circlePreviewPoint);
                         circlePreviewObj = null; circlePreviewPoint = null; circlePreviewRadius = null;
-
+                        // 取消 highlight: false，让圆边能够高亮！
                         board.create('circle', [clickPoints[0], clickPoints[1]], { strokeWidth: 2, strokeColor: selectedColor, fillColor: selectedColor, fillOpacity: 0.1 });
                         clickPoints = [];
+                        triggerSave(); 
                     }
                 }
             });
             
-            // 【核心配套：鼠标松开解冻实体机制】
             board.on('up', function(e) {
                 if (activeLabelParent) {
                     activeLabelParent.setAttribute({fixed: false});
-                    activeLabel = null;
-                    activeLabelParent = null;
+                    activeLabel = null; activeLabelParent = null;
+                    hasDraggedGraphic = true; 
                 }
+                if (currentMode === 'pointer' && hasDraggedGraphic) {
+                    triggerSave();
+                }
+                hasDraggedGraphic = false; 
             });
         }
 
-        // ================= 【设置面板交互逻辑】 =================
+        // ================= 【各种外围操作对接】 =================
         function openSettingsModal() {
             document.getElementById('setting-tick').value = globalBoardSettings.tickDistance;
             document.getElementById('setting-xmin').value = globalBoardSettings.bbox[0];
@@ -873,9 +1035,7 @@
             document.getElementById('settings-modal').classList.remove('hidden');
         }
 
-        function closeSettingsModal() {
-            document.getElementById('settings-modal').classList.add('hidden');
-        }
+        function closeSettingsModal() { document.getElementById('settings-modal').classList.add('hidden'); }
 
         function applySettings() {
             globalBoardSettings.tickDistance = parseFloat(document.getElementById('setting-tick').value) || 1;
@@ -885,101 +1045,76 @@
             globalBoardSettings.bbox[3] = parseFloat(document.getElementById('setting-ymin').value) || -8;
 
             board.setBoundingBox(globalBoardSettings.bbox, true); 
-            
             if (board.defaultAxes) {
-                if (board.defaultAxes.x && board.defaultAxes.x.ticks && board.defaultAxes.x.ticks[0]) {
-                    board.defaultAxes.x.ticks[0].setAttribute({ticksDistance: globalBoardSettings.tickDistance, insertTicks: false});
-                }
-                if (board.defaultAxes.y && board.defaultAxes.y.ticks && board.defaultAxes.y.ticks[0]) {
-                    board.defaultAxes.y.ticks[0].setAttribute({ticksDistance: globalBoardSettings.tickDistance, insertTicks: false});
-                }
+                if (board.defaultAxes.x && board.defaultAxes.x.ticks && board.defaultAxes.x.ticks[0]) board.defaultAxes.x.ticks[0].setAttribute({ticksDistance: globalBoardSettings.tickDistance, insertTicks: false});
+                if (board.defaultAxes.y && board.defaultAxes.y.ticks && board.defaultAxes.y.ticks[0]) board.defaultAxes.y.ticks[0].setAttribute({ticksDistance: globalBoardSettings.tickDistance, insertTicks: false});
             }
-            
             board.update();
             closeSettingsModal();
+            triggerSave(); 
         }
 
-        function requestClearBoard() {
-            document.getElementById('confirm-modal').classList.remove('hidden');
-        }
-
-        function closeConfirmModal() {
-            document.getElementById('confirm-modal').classList.add('hidden');
-        }
+        function requestClearBoard() { document.getElementById('confirm-modal').classList.remove('hidden'); }
+        function closeConfirmModal() { document.getElementById('confirm-modal').classList.add('hidden'); }
 
         function executeClearBoard() {
             closeConfirmModal();
-            JXG.JSXGraph.freeBoard(board);
-            document.getElementById('jxgbox').innerHTML = '';
-            initBoard();
-            clickPoints = []; tempLines = [];
-            circlePreviewObj = null; circlePreviewPoint = null; circlePreviewRadius = null;
+            JXG.JSXGraph.freeBoard(board); document.getElementById('jxgbox').innerHTML = '';
+            clickPoints = []; tempLines = []; circlePreviewObj = null; circlePreviewPoint = null; circlePreviewRadius = null;
             angleColorIdx = 1; pointCharCode = 68; 
             isAxesVisible = true; isPointsVisible = true; isAnglesVisible = true;
             document.getElementById('btn-toggle-axes').innerText = '👁️ 坐标';
             document.getElementById('btn-toggle-points').innerText = '👁️ 隐藏点';
             document.getElementById('btn-toggle-angles').innerText = '👁️ 隐藏角';
             setMode('pointer');
+            
+            startupApp(); 
         }
 
         function closePromptModal() {
             document.getElementById('prompt-modal').classList.add('hidden');
-            pendingTextCoords = null;
-            setMode('pointer');
+            pendingTextCoords = null; setMode('pointer');
         }
 
         function executeAddText() {
             let latex = document.getElementById('latex-input').value;
             if (latex && pendingTextCoords) {
                 board.create('text', [pendingTextCoords[0], pendingTextCoords[1], '$' + latex + '$'], {
-                    fontSize: 18, useMathJax: true, needsRegularUpdate: false,
-                    fixed: false, cssClass: 'draggable-text' 
+                    fontSize: 18, useMathJax: true, needsRegularUpdate: false, fixed: false, cssClass: 'draggable-text' 
                 });
+                triggerSave(); 
             }
-            closePromptModal();
-            setMode('pointer');
+            closePromptModal(); setMode('pointer');
         }
 
         function openGenericModal(title, desc, defaultVal, callback) {
             document.getElementById('generic-modal-title').innerText = title;
             document.getElementById('generic-modal-desc').innerText = desc;
-            
-            let errorEl = document.getElementById('generic-modal-error');
-            errorEl.classList.add('hidden');
-            errorEl.innerText = '';
-
-            let inputEl = document.getElementById('generic-input');
-            inputEl.value = defaultVal;
+            let errorEl = document.getElementById('generic-modal-error'); errorEl.classList.add('hidden'); errorEl.innerText = '';
+            let inputEl = document.getElementById('generic-input'); inputEl.value = defaultVal;
             genericModalCallback = callback;
             document.getElementById('generic-modal').classList.remove('hidden');
             setTimeout(() => { inputEl.focus(); inputEl.select(); }, 50);
         }
 
         function closeGenericModal() {
-            document.getElementById('generic-modal').classList.add('hidden');
-            genericModalCallback = null;
-            if (!document.getElementById('prompt-modal').classList.contains('hidden')) {
-                document.getElementById('latex-input').focus();
-            }
+            document.getElementById('generic-modal').classList.add('hidden'); genericModalCallback = null;
+            if (!document.getElementById('prompt-modal').classList.contains('hidden')) document.getElementById('latex-input').focus();
         }
 
         function submitGenericModal() {
             let val = document.getElementById('generic-input').value.trim();
-            if (genericModalCallback) {
-                let isValid = genericModalCallback(val);
-                if (isValid === false) return; 
-            }
+            if (genericModalCallback) { let isValid = genericModalCallback(val); if (isValid === false) return; }
             closeGenericModal();
         }
 
         function openEraserModal(items) {
-            let listEl = document.getElementById('eraser-list');
-            listEl.innerHTML = '';
+            let listEl = document.getElementById('eraser-list'); listEl.innerHTML = '';
             items.forEach((item) => {
                 let btn = document.createElement('button');
                 btn.className = "w-full text-left px-3 py-2 bg-gray-50 hover:bg-red-50 hover:text-red-600 border border-gray-200 rounded text-sm transition-colors";
                 btn.innerText = `擦除: ${item.desc}`;
-                btn.onclick = () => { board.removeObject(item.obj); board.update(); closeEraserModal(); };
+                btn.onclick = () => { board.removeObject(item.obj); board.update(); closeEraserModal(); triggerSave(); }; 
                 listEl.appendChild(btn);
             });
             document.getElementById('eraser-modal').classList.remove('hidden');
@@ -992,13 +1127,16 @@
             const pB = board.create('point', [-4, -2], { name: 'B', size: 5, color: '#dc2626', label: { offset: [-20, -15] } });
             const pC = board.create('point', [4, -2], { name: 'C', size: 5, color: '#dc2626', label: { offset: [15, -15] } });
 
-            board.create('polygon', [pA, pB, pC], {
-                fillColor: '#fef2f2', fillOpacity: 0.6, hasInnerPoints: true,
-                borders: { strokeColor: '#b91c1c', strokeWidth: 2, fixed: true }
+            // 【高亮修复】：多边形面不高亮，但允许其边缘发生自然的感应高亮
+            board.create('polygon', [pA, pB, pC], { 
+                fillColor: '#fef2f2', fillOpacity: 0.6, hasInnerPoints: true, 
+                highlightFillColor: '#fef2f2', highlightFillOpacity: 0.6, 
+                borders: { strokeColor: '#b91c1c', strokeWidth: 2, fixed: true } 
             });
 
+            // 扇形也允许被高亮选中了
             const angleA = board.create('angle', [pB, pA, pC], {
-                name: '', withLabel: false, radius: 1.5, fillColor: '#fca5a5', strokeColor: '#dc2626' 
+                name: '', withLabel: false, radius: 0.5, fillColor: '#fca5a5', strokeColor: '#dc2626'
             });
             angleA.customLabel = 'A'; angleA.vertexPoint = pA;
         }
@@ -1013,9 +1151,7 @@
             }
             if (mode !== 'point' && snapPreviewPoint) { snapPreviewPoint.moveTo([9999, 9999]); activeSnapPoint = null; }
 
-            if (board && board.attr && board.attr.pan) {
-                board.attr.pan.enabled = (mode === 'pan');
-            }
+            if (board && board.attr && board.attr.pan) { board.attr.pan.enabled = (mode === 'pan'); }
 
             document.querySelectorAll('.tool-btn').forEach(btn => {
                 btn.classList.remove('bg-white', 'shadow-sm', 'text-blue-600'); btn.classList.add('text-gray-600');
@@ -1037,13 +1173,13 @@
             const messages = {
                 'pointer': '当前模式：选择。拖拽图形内部可平移，拖拽顶点变形，拖拽字母可单独调整文字位置。',
                 'pan': '当前模式：漫游。在画布空白处按住鼠标左键即可随意移动视角。所有模式均支持滚轮缩放。',
-                'point': '当前模式：加点。点击落点后将弹窗确认点名，支持连按回车按字母顺序自动递增。',
+                'point': '当前模式：加点。靠近线段自动吸附（显示比例），支持连按回车按字母顺序自动递增。',
                 'line': '当前模式：连线。连续点击两个位置以绘制一条线段。',
                 'circle': '当前模式：画圆。点击确定圆心(默认O)，拖动鼠标出现虚线预览，再次点击确定半径。',
                 'polygon': '当前模式：多边形。依次点击各个顶点，最后回到起点点击以闭合多边形。',
                 'markAngle': '当前模式：标角。直接点击你想标记的“角内部”，可新增或重命名角度标记。',
                 'text': '当前模式：公式。点击【角/线段/点】会自动飞入公式；点击【未标的角】可自动创建扇形并录入！',
-                'color': '当前模式：改色。从工具栏选择颜色后，点击任意线段或图形改变其颜色。',
+                'color': '当前模式：改色。从工具栏选好颜色后，将鼠标移至线段或图形(会有高亮提示)点击即可变色。',
                 'eraser': '当前模式：擦除。点击画板上的任意元素将其删除。重叠时将弹窗询问。'
             };
             statusBar.innerText = messages[mode];
@@ -1051,15 +1187,10 @@
 
         function toggleAxes() {
             isAxesVisible = !isAxesVisible;
-            if (board.defaultAxes) {
-                if (board.defaultAxes.x) board.defaultAxes.x.setAttribute({visible: isAxesVisible});
-                if (board.defaultAxes.y) board.defaultAxes.y.setAttribute({visible: isAxesVisible});
-            }
-            if (board.grids) {
-                for (let i = 0; i < board.grids.length; i++) board.grids[i].setAttribute({visible: isAxesVisible});
-            }
+            toggleAxesSilent(isAxesVisible);
             board.update();
             document.getElementById('btn-toggle-axes').innerText = isAxesVisible ? '👁️ 隐藏坐标' : '🙈 显示坐标';
+            triggerSave(); 
         }
 
         function togglePoints() {
@@ -1071,6 +1202,7 @@
             board.update();
             document.getElementById('btn-toggle-points').innerText = isPointsVisible ? '👁️ 隐藏点' : '🙈 显示点';
             if (currentMode === 'point') setMode('point');
+            triggerSave(); 
         }
 
         function toggleAngles() {
@@ -1081,6 +1213,7 @@
             }
             board.update();
             document.getElementById('btn-toggle-angles').innerText = isAnglesVisible ? '👁️ 隐藏角' : '🙈 显示角';
+            triggerSave(); 
         }
 
         function changeBgColor(color) {
