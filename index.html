@@ -68,7 +68,6 @@
     <div id="settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center transition-opacity">
         <div class="bg-white rounded-lg p-6 w-80 shadow-2xl transform transition-transform scale-100">
             <h3 class="text-lg font-bold text-gray-800 mb-4">⚙️ 画板初始化设置</h3>
-            
             <div class="space-y-4 mb-6">
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">坐标刻度间距 (单位)</label>
@@ -93,7 +92,6 @@
                     </div>
                 </div>
             </div>
-            
             <div class="flex justify-end space-x-3">
                 <button onclick="closeSettingsModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition">取消</button>
                 <button onclick="applySettings()" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition">应用设置</button>
@@ -127,6 +125,38 @@
         </div>
     </div>
 
+    <!-- 【防遮挡的悬浮角选择与修改大一统面板】 -->
+    <div id="unified-angle-panel" class="hidden fixed top-24 left-4 z-50 transition-opacity shadow-2xl">
+        <div class="bg-white rounded-lg p-5 w-80 border border-gray-200">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-md font-bold text-gray-800">📐 角度标记管理</h3>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">请选择角区间，并输入名称（如 1, \alpha）。</p>
+            <div id="unified-angle-list" class="space-y-1 mb-3 max-h-40 overflow-y-auto border border-gray-200 p-2 rounded bg-gray-50"></div>
+            <input type="text" id="unified-angle-input" placeholder="留空仅画弧，顶字母同名隐字" class="w-full border border-gray-300 rounded-md p-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 mb-1">
+            <p id="unified-angle-error" class="text-xs text-red-500 mb-2 hidden"></p>
+            <div class="flex justify-end space-x-3 mt-2">
+                <button onclick="closeUnifiedAnglePanel()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition">取消</button>
+                <button onclick="submitUnifiedAnglePanel()" id="unified-angle-submit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition">新建/修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 【神级挂载：多边形/子区域填充提取面板】 -->
+    <div id="unified-region-panel" class="hidden fixed top-24 left-4 z-50 transition-opacity shadow-2xl">
+        <div class="bg-white rounded-lg p-5 w-80 border border-gray-200">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-md font-bold text-gray-800">🎨 填充区域选择</h3>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">检测到该处重叠了多个闭合区间，请精确选择你要着色的范围：</p>
+            <div id="unified-region-list" class="space-y-1 mb-3 max-h-40 overflow-y-auto border border-gray-200 p-2 rounded bg-gray-50"></div>
+            <div class="flex justify-end space-x-3 mt-2">
+                <button onclick="closeUnifiedRegionPanel()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition">取消</button>
+                <button onclick="submitUnifiedRegionPanel()" id="unified-region-submit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition">确定填充</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 输入公式浮动面板 -->
     <div id="prompt-modal" class="hidden fixed bottom-12 right-8 z-50 transition-opacity shadow-2xl">
         <div class="bg-white rounded-lg p-5 w-96 border border-gray-200">
@@ -134,7 +164,7 @@
                 <h3 class="text-md font-bold text-gray-800">🔤 公式编辑器</h3>
                 <span class="text-xs text-blue-600 bg-blue-50 border border-blue-100 px-2 py-1 rounded">🖱️ 智能联动激活</span>
             </div>
-            <p class="text-xs text-gray-500 mb-2">直接点击画板元素自动录入公式。如果点击<b>未标记的角</b>，将自动生成扇形并完成录入。</p>
+            <p class="text-xs text-gray-500 mb-2">直接点击画板元素自动录入公式。如果点击<b>未标记的角</b>，将自动弹出左侧选角面板并完成录入。</p>
             <input type="text" id="latex-input" class="w-full border border-gray-300 rounded-md p-3 mb-4 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value="">
             <div class="flex justify-end space-x-3">
                 <button onclick="closePromptModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition">取消</button>
@@ -223,9 +253,11 @@
         let pendingTextCoords = null;
         
         let snapPreviewPoint = null; 
-        let circlePreviewPoint = null; 
-        let circlePreviewObj = null;   
-        let circlePreviewRadius = null;
+        
+        // 统合图形绘制预览系统
+        let shapePreviewPoint = null; 
+        let shapePreviewObj = null;   
+        let shapePreviewRadius = null;
         
         let activeLabel = null;
         let activeLabelParent = null;
@@ -233,10 +265,16 @@
         let labelDragStartUsr = null;
         let hasDraggedGraphic = false; 
 
+        // 全局吸附线段跟踪器
+        let activeSnapSegment = null;
+
         const angleColors = ['#fca5a5', '#bef264', '#86efac', '#93c5fd', '#c4b5fd', '#f9a8d4', '#fde047'];
         let angleColorIdx = 1;       
         let pointCharCode = 68; 
         let genericModalCallback = null;
+
+        let unifiedAngleContext = null;
+        let unifiedRegionContext = null;
 
         let globalBoardSettings = {
             tickDistance: 1, 
@@ -255,7 +293,7 @@
             saveTimeout = setTimeout(() => { executeSaveHistory(); }, 50); 
         }
 
-        // 精准对象序列化
+        // 精准对象序列化，将 point 和 glider 融合保存
         function dumpBoardState() {
             let state = { points: [], lines: [], circles: [], polygons: [], angles: [], texts: [] };
             
@@ -264,32 +302,28 @@
                 if (!el.elType || !el.visProp) continue;
                 
                 let idLower = el.id.toLowerCase();
-                // 彻底隔离坐标轴、网格线和系统自带鼠标气泡 (infobox)
                 if (idLower.indexOf('ticks') > -1 || idLower.indexOf('axes') > -1 || idLower.indexOf('grid') > -1 || idLower.indexOf('infobox') > -1) continue;
-                if (el === snapPreviewPoint || el === circlePreviewPoint || el === circlePreviewObj || el === circlePreviewRadius) continue;
-
-                if (el.elType === 'point') {
-                    state.points.push({
-                        oldId: el.id, name: el.name, coords: [el.X(), el.Y()], color: el.visProp.fillcolor, size: el.visProp.size,
-                        visible: el.visProp.visible, labelOffset: (el.label && el.label.visProp && el.label.visProp.offset) ? [...el.label.visProp.offset] : [15, 15]
-                    });
-                }
-            }
-            
-            for (let id in board.objects) {
-                let el = board.objects[id];
-                if (!el.elType || !el.visProp) continue;
-                let idLower = el.id.toLowerCase();
-                if (idLower.indexOf('ticks') > -1 || idLower.indexOf('axes') > -1 || idLower.indexOf('grid') > -1 || idLower.indexOf('infobox') > -1) continue;
-                if (el === snapPreviewPoint || el === circlePreviewPoint || el === circlePreviewObj || el === circlePreviewRadius) continue;
+                if (el === snapPreviewPoint || el === shapePreviewPoint || el === shapePreviewObj || el === shapePreviewRadius) continue;
 
                 let isBorder = false;
-                for (let pId in board.objects) {
-                    if (board.objects[pId].elType === 'polygon' && board.objects[pId].borders && board.objects[pId].borders.includes(el)) isBorder = true;
+                if (el.elType === 'segment' || el.elType === 'line') {
+                    for (let pId in board.objects) {
+                        if (board.objects[pId].elType === 'polygon' && board.objects[pId].borders && board.objects[pId].borders.includes(el)) { isBorder = true; break; }
+                    }
                 }
                 if (isBorder) continue;
 
-                if (el.elType === 'segment' || el.elType === 'line') {
+                if (['point', 'glider'].includes(el.elType)) {
+                    let slideObjId = null;
+                    if (el.visProp && el.visProp.slideobject) slideObjId = el.visProp.slideobject.id || el.visProp.slideobject;
+                    if (!slideObjId && el.slideObject) slideObjId = el.slideObject.id;
+
+                    state.points.push({
+                        oldId: el.id, name: el.name || el.plaintext || '', coords: [el.X(), el.Y()], color: el.visProp.fillcolor, size: el.visProp.size,
+                        visible: el.visProp.visible, labelOffset: (el.label && el.label.visProp && el.label.visProp.offset) ? [...el.label.visProp.offset] : [15, 15],
+                        slideObject: slideObjId
+                    });
+                } else if (el.elType === 'segment' || el.elType === 'line') {
                     if(el.point1 && el.point2) {
                         state.lines.push({ 
                             oldId: el.id, type: el.elType, p1: el.point1.id, p2: el.point2.id, 
@@ -303,13 +337,20 @@
                     }
                 } else if (el.elType === 'polygon') {
                     let strokeColor = '#b91c1c';
-                    if (el.borders && el.borders[0] && el.borders[0].visProp) {
-                        strokeColor = el.borders[0].visProp.strokecolor;
-                    }
-                    state.polygons.push({ oldId: el.id, vertices: el.vertices.slice(0, -1).map(v => v.id), color: el.visProp.fillcolor, strokeColor: strokeColor });
+                    if (el.borders && el.borders[0] && el.borders[0].visProp) { strokeColor = el.borders[0].visProp.strokecolor; }
+                    state.polygons.push({ 
+                        oldId: el.id, vertices: el.vertices.slice(0, -1).map(v => v.id), 
+                        color: el.visProp.fillcolor, strokeColor: strokeColor,
+                        borderIds: el.borders.map(b => b.id), fillOpacity: el.visProp.fillopacity
+                    });
                 } else if (el.elType === 'angle') {
                     if(el.point1 && el.point2 && el.point3) {
-                        state.angles.push({ oldId: el.id, p1: el.point1.id, p2: el.point2.id, p3: el.point3.id, vertexPoint: el.vertexPoint ? el.vertexPoint.id : el.point2.id, customLabel: el.customLabel || '', color: el.visProp.fillcolor, visible: el.visProp.visible });
+                        state.angles.push({ 
+                            oldId: el.id, p1: el.point1.id, p2: el.point2.id, p3: el.point3.id, 
+                            vertexPoint: el.vertexPoint ? el.vertexPoint.id : el.point2.id, 
+                            customLabel: el.customLabel || '', color: el.visProp.fillcolor, visible: el.visProp.visible,
+                            name: el.name || '', withLabel: el.visProp.withlabel || false
+                        });
                     }
                 } else if (el.elType === 'text') {
                     if (el.isLabel) continue; 
@@ -328,36 +369,16 @@
         function executeSaveHistory() {
             if (isRestoring) return;
             if (snapPreviewPoint) { snapPreviewPoint.moveTo([9999, 9999]); board.update(); }
-            
-            if (historyIndex < historyStack.length - 1) {
-                historyStack = historyStack.slice(0, historyIndex + 1);
-            }
+            if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1); }
             
             let stateData = dumpBoardState();
-            
-            historyStack.push({
-                data: stateData,
-                pointCharCode: pointCharCode,
-                angleColorIdx: angleColorIdx,
-                bbox: board.getBoundingBox() 
-            });
+            historyStack.push({ data: stateData, pointCharCode: pointCharCode, angleColorIdx: angleColorIdx, bbox: board.getBoundingBox() });
             historyIndex++;
             updateUndoRedoButtons();
         }
 
-        function undo() {
-            if (historyIndex > 0 && !isRestoring) {
-                historyIndex--;
-                restoreState(historyStack[historyIndex]);
-            }
-        }
-
-        function redo() {
-            if (historyIndex < historyStack.length - 1 && !isRestoring) {
-                historyIndex++;
-                restoreState(historyStack[historyIndex]);
-            }
-        }
+        function undo() { if (historyIndex > 0 && !isRestoring) { historyIndex--; restoreState(historyStack[historyIndex]); } }
+        function redo() { if (historyIndex < historyStack.length - 1 && !isRestoring) { historyIndex++; restoreState(historyStack[historyIndex]); } }
 
         function updateUndoRedoButtons() {
             document.getElementById('btn-undo').disabled = (historyIndex <= 0);
@@ -374,17 +395,17 @@
 
         function restoreState(state) {
             isRestoring = true;
-            
             JXG.JSXGraph.freeBoard(board);
             document.getElementById('jxgbox').innerHTML = '';
-            clickPoints = []; tempLines = []; circlePreviewObj = null; circlePreviewPoint = null; circlePreviewRadius = null; snapPreviewPoint = null;
-            activeLabel = null; activeLabelParent = null;
+            clickPoints = []; tempLines = []; shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null; snapPreviewPoint = null;
+            activeLabel = null; activeLabelParent = null; activeSnapSegment = null;
             
             initBoardCore();
             board.setBoundingBox(state.bbox, true);
             
             let idMap = {};
-            state.data.points.forEach(p => {
+            
+            state.data.points.filter(p => !p.slideObject).forEach(p => {
                 let newP = board.create('point', p.coords, { name: p.name, fillColor: p.color, strokeColor: 'white', size: p.size || 4, visible: p.visible, withLabel: p.name !== '', label: { offset: p.labelOffset } });
                 idMap[p.oldId] = newP;
             });
@@ -392,24 +413,18 @@
             state.data.polygons.forEach(p => {
                 let pts = p.vertices.map(vId => idMap[vId]).filter(x=>x);
                 if (pts.length > 0) {
-                    // 【高亮修复】：面不高亮，但允许边缘高亮！
-                    let poly = board.create('polygon', pts, { 
-                        fillColor: p.color, fillOpacity: 0.6, hasInnerPoints: true, 
-                        highlightFillColor: p.color, highlightFillOpacity: 0.6,
-                        borders: { strokeColor: p.strokeColor, strokeWidth: 2, fixed: true } 
-                    });
+                    let poly = board.create('polygon', pts, { fillColor: p.color, fillOpacity: p.fillOpacity !== undefined ? p.fillOpacity : 0, hasInnerPoints: true, highlightFillColor: p.color, highlightFillOpacity: p.fillOpacity !== undefined ? p.fillOpacity : 0, borders: { strokeColor: p.strokeColor, strokeWidth: 2, fixed: true } });
                     idMap[p.oldId] = poly;
+                    if (p.borderIds) {
+                        p.borderIds.forEach((oldBId, idx) => { if (poly.borders[idx]) idMap[oldBId] = poly.borders[idx]; });
+                    }
                 }
             });
             
             state.data.lines.forEach(l => {
                 let p1 = idMap[l.p1], p2 = idMap[l.p2];
                 if (p1 && p2) {
-                    // 恢复线段时不强制关闭 highlight，允许其受鼠标感应
-                    let newLine = board.create(l.type, [p1, p2], { 
-                        strokeColor: l.color, strokeWidth: (l.type==='line'||l.type==='segment')?2:1, 
-                        dash: l.dash, straightFirst: l.straightFirst, straightLast: l.straightLast
-                    });
+                    let newLine = board.create(l.type, [p1, p2], { strokeColor: l.color, strokeWidth: (l.type==='line'||l.type==='segment')?2:1, dash: l.dash, straightFirst: l.straightFirst, straightLast: l.straightLast });
                     idMap[l.oldId] = newLine;
                 }
             });
@@ -421,12 +436,28 @@
                     idMap[c.oldId] = circ;
                 }
             });
+
+            state.data.points.filter(p => p.slideObject).forEach(p => {
+                let props = { name: p.name, fillColor: p.color, strokeColor: 'white', size: p.size || 4, visible: p.visible, withLabel: p.name !== '', label: { offset: p.labelOffset } };
+                let slideObj = idMap[p.slideObject];
+                let newP;
+                if (slideObj) {
+                    newP = board.create('glider', [p.coords[0], p.coords[1], slideObj], props);
+                } else {
+                    newP = board.create('point', p.coords, props);
+                }
+                idMap[p.oldId] = newP;
+            });
             
             state.data.angles.forEach(a => {
                 let p1 = idMap[a.p1], p2 = idMap[a.p2], p3 = idMap[a.p3];
                 let vp = idMap[a.vertexPoint] || p2; 
                 if (p1 && p2 && p3) {
-                    let ang = board.create('angle', [p1, p2, p3], { name: '', withLabel: false, radius: 0.5, fillColor: a.color, strokeColor: a.color, visible: a.visible });
+                    let ang = board.create('angle', [p1, p2, p3], { 
+                        name: a.name || '', withLabel: a.withLabel || false, 
+                        radius: 0.5, fillColor: a.color, strokeColor: a.color, visible: a.visible, highlight: false,
+                        label: { useMathJax: true }
+                    });
                     ang.customLabel = a.customLabel; ang.vertexPoint = vp;
                     idMap[a.oldId] = ang;
                 }
@@ -444,17 +475,10 @@
 
         window.onload = function() {
             function checkReady() {
-                if (typeof JXG === 'undefined') {
-                    setTimeout(checkReady, 50);
-                    return;
-                }
+                if (typeof JXG === 'undefined') { setTimeout(checkReady, 50); return; }
                 if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
-                    window.MathJax.startup.promise.then(() => {
-                        startupApp();
-                    }).catch(() => { startupApp(); });
-                } else {
-                    startupApp();
-                }
+                    window.MathJax.startup.promise.then(() => { startupApp(); }).catch(() => { startupApp(); });
+                } else { startupApp(); }
             }
             checkReady();
             
@@ -462,28 +486,20 @@
             if (inputEl) inputEl.addEventListener('keypress', function(e) { if (e.key === 'Enter') executeAddText(); });
             let genInput = document.getElementById('generic-input');
             if (genInput) genInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') submitGenericModal(); });
+            let unifiedInput = document.getElementById('unified-angle-input');
+            if (unifiedInput) unifiedInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') submitUnifiedAnglePanel(); });
         };
 
         function startupApp() {
-            initBoardCore();
-            recreatePreviewSystem();
-            bindBoardEvents();
-            drawInitialShapes();
-            
+            initBoardCore(); recreatePreviewSystem(); bindBoardEvents(); drawInitialShapes();
             setTimeout(() => { executeSaveHistory(); }, 200);
         }
 
         function initBoardCore() {
-            // 【全面净化】：直接从全局关掉原生的点坐标气泡！
             JXG.Options.point.showInfobox = false;
-
             board = JXG.JSXGraph.initBoard('jxgbox', { 
-                boundingbox: globalBoardSettings.bbox, 
-                axis: true, 
-                defaultAxes: {
-                    x: { ticks: { ticksDistance: globalBoardSettings.tickDistance, insertTicks: false } },
-                    y: { ticks: { ticksDistance: globalBoardSettings.tickDistance, insertTicks: false } }
-                },
+                boundingbox: globalBoardSettings.bbox, axis: true, 
+                defaultAxes: { x: { ticks: { ticksDistance: globalBoardSettings.tickDistance, insertTicks: false } }, y: { ticks: { ticksDistance: globalBoardSettings.tickDistance, insertTicks: false } } },
                 grid: true, showCopyright: false, showNavigation: true, keepaspectratio: true,
                 selection: { enabled: true, needShift: true, needCtrl: false },
                 pan: { enabled: false, needTwoFingers: false, needShift: false },
@@ -504,11 +520,9 @@
 
         function recreatePreviewSystem() {
             if (!snapPreviewPoint) {
-                // 【修复：比例标签防失效】 name不能是空字符串，必须是空格，才能迫使引擎稳定生成文本图层
                 snapPreviewPoint = board.create('point', [9999, 9999], {
                     visible: true, size: 5, fillColor: '#f59e0b', strokeColor: '#ffffff', strokeWidth: 2,
-                    name: ' ', withLabel: true, fixed: true, layer: 10,
-                    label: { offset: [12, 15], useMathJax: false, cssClass: 'snap-label' }
+                    name: '吸附', withLabel: true, fixed: true, layer: 10, label: { offset: [12, 15], useMathJax: false, cssClass: 'snap-label' }
                 });
             }
         }
@@ -517,57 +531,36 @@
         function zoomOutBoard() { if (board) board.zoomOut(); }
         function fitBoardToScreen() {
             if (!board) return;
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            let hasPoints = false;
-            
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, hasPoints = false;
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (el.elType === 'point' && el.visProp.visible) {
-                    if (el === snapPreviewPoint || el === circlePreviewPoint) continue;
-                    minX = Math.min(minX, el.X());
-                    maxX = Math.max(maxX, el.X());
-                    minY = Math.min(minY, el.Y());
-                    maxY = Math.max(maxY, el.Y());
-                    hasPoints = true;
+                if (['point', 'glider'].includes(el.elType) && el.visProp.visible) {
+                    if (el === snapPreviewPoint || el === shapePreviewPoint) continue;
+                    minX = Math.min(minX, el.X()); maxX = Math.max(maxX, el.X()); minY = Math.min(minY, el.Y()); maxY = Math.max(maxY, el.Y()); hasPoints = true;
                 }
             }
-            
-            if (!hasPoints) {
-                board.setBoundingBox(globalBoardSettings.bbox, true);
-                return;
-            }
-            
-            let width = maxX - minX;
-            let height = maxY - minY;
-            if (width < 1) width = 10;
-            if (height < 1) height = 10;
-            
-            let marginX = width * 0.2;
-            let marginY = height * 0.2;
-            
-            board.setBoundingBox([minX - marginX, maxY + marginY, maxX + marginX, minY - marginY], true);
+            if (!hasPoints) { board.setBoundingBox(globalBoardSettings.bbox, true); return; }
+            let width = maxX - minX, height = maxY - minY;
+            if (width < 1) width = 10; if (height < 1) height = 10;
+            board.setBoundingBox([minX - width * 0.2, maxY + height * 0.2, maxX + width * 0.2, minY - height * 0.2], true);
         }
 
         function isAngleNameDuplicate(name, excludeId) {
             if (!name) return false; 
             for (let id in board.objects) {
                 let obj = board.objects[id];
-                if (obj.elType === 'angle' && obj.id !== excludeId && obj.customLabel === name) {
-                    return true;
-                }
+                if (obj.elType === 'angle' && obj.id !== excludeId && obj.customLabel === name) return true;
             }
             return false;
         }
 
         function showGenericError(msg) {
-            let errEl = document.getElementById('generic-modal-error');
-            errEl.innerText = msg;
-            errEl.classList.remove('hidden');
+            let errEl = document.getElementById('generic-modal-error'); errEl.innerText = msg; errEl.classList.remove('hidden');
         }
 
         function getNextAutoPointName(isCenter = false) {
             if (isCenter) {
-                let exists = Object.values(board.objects).some(el => el.elType === 'point' && el.name === 'O');
+                let exists = Object.values(board.objects).some(el => ['point', 'glider'].includes(el.elType) && el.name === 'O');
                 return exists ? 'O_1' : 'O';
             }
             let name = String.fromCharCode(pointCharCode);
@@ -579,18 +572,40 @@
         function updatePointCharCode(val) {
             if (!val || val.length !== 1) return;
             let code = val.toUpperCase().charCodeAt(0);
-            if (code >= 65 && code <= 90) {
-                pointCharCode = code + 1;
-                if (pointCharCode > 90) pointCharCode = 65;
-            }
+            if (code >= 65 && code <= 90) { pointCharCode = code + 1; if (pointCharCode > 90) pointCharCode = 65; }
         }
 
-        function getAnglePointsFromVertex(v, clickCoords) {
+        function getPtName(pt) {
+            if (pt.name && typeof pt.name === 'string' && pt.name.trim() !== '' && pt.name !== '吸附') return pt.name;
+            if (pt.plaintext && pt.plaintext.trim() !== '') return pt.plaintext;
+            return '?';
+        }
+
+        // ================= 【核心绝杀：贯穿点、交叉线全系覆盖的子角提取算法 (自动去重)】 =================
+        function getAllAnglesFromVertex(v, clickCoords) {
             let segments = [];
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if ((el.elType === 'segment' || el.elType === 'line') && (el.point1 === v || el.point2 === v)) {
-                    segments.push(el.point1 === v ? el.point2 : el.point1);
+                if (el.elType === 'segment' || el.elType === 'line') {
+                    if (el.point1 === v) segments.push(el.point2);
+                    else if (el.point2 === v) segments.push(el.point1);
+                    else {
+                        let p1 = el.point1, p2 = el.point2;
+                        if (p1 && p2) {
+                            let len = Math.hypot(p2.X() - p1.X(), p2.Y() - p1.Y());
+                            if (len > 0.01) {
+                                let cross = Math.abs((p2.Y() - p1.Y()) * (v.X() - p1.X()) - (p2.X() - p1.X()) * (v.Y() - p1.Y()));
+                                let dist = cross / len;
+                                if (dist < 0.1) { 
+                                    let t = ((v.X() - p1.X()) * (p2.X() - p1.X()) + (v.Y() - p1.Y()) * (p2.Y() - p1.Y())) / (len * len);
+                                    if (t > 0.01 && t < 0.99) { 
+                                        segments.push(p1);
+                                        segments.push(p2);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else if (el.elType === 'polygon') {
                     let idx = el.vertices.indexOf(v);
                     if (idx !== -1 && idx < el.vertices.length - 1) {
@@ -603,43 +618,334 @@
                 }
             }
             segments = [...new Set(segments)]; 
+            if (segments.length < 2) return null;
 
-            if (segments.length >= 2) {
-                let p1, p2;
-                if (segments.length === 2) {
-                    p1 = segments[0]; p2 = segments[1];
-                } else {
-                    let mouseAng = Math.atan2(clickCoords[1] - v.Y(), clickCoords[0] - v.X());
-                    let sorted = segments.map(p => {
-                        return { p: p, a: Math.atan2(p.Y() - v.Y(), p.X() - v.X()) };
-                    }).sort((a,b) => a.a - b.a);
+            let sorted = segments.map(p => { return { p: p, a: Math.atan2(p.Y() - v.Y(), p.X() - v.X()) }; }).sort((a,b) => a.a - b.a);
 
-                    let found = false;
-                    for (let i = 0; i < sorted.length; i++) {
-                        let a1 = sorted[i].a;
-                        let a2 = sorted[(i+1)%sorted.length].a;
-                        if (a2 < a1) a2 += 2*Math.PI;
-                        let ma = mouseAng;
-                        while(ma < a1) ma += 2*Math.PI;
-                        if (ma >= a1 && ma <= a2) {
-                            p1 = sorted[i].p; p2 = sorted[(i+1)%sorted.length].p;
-                            found = true; break;
-                        }
-                    }
-                    if(!found) { p1 = sorted[0].p; p2 = sorted[1].p; }
-                }
+            let mouseAng = Math.atan2(clickCoords[1] - v.Y(), clickCoords[0] - v.X());
+            let defaultP1 = sorted[0].p, defaultP2 = sorted[1].p;
+            for (let i = 0; i < sorted.length; i++) {
+                let a1 = sorted[i].a, a2 = sorted[(i+1)%sorted.length].a;
+                if (a2 < a1) a2 += 2*Math.PI;
+                let ma = mouseAng;
+                while(ma < a1) ma += 2*Math.PI;
+                if (ma >= a1 && ma <= a2) { defaultP1 = sorted[i].p; defaultP2 = sorted[(i+1)%sorted.length].p; break; }
+            }
 
-                let a1 = Math.atan2(p1.Y() - v.Y(), p1.X() - v.X());
-                let a2 = Math.atan2(p2.Y() - v.Y(), p2.X() - v.X());
+            let allPairs = [];
+            let n = sorted.length;
+            
+            if (n === 2) {
+                let a1 = Math.atan2(defaultP1.Y() - v.Y(), defaultP1.X() - v.X());
+                let a2 = Math.atan2(defaultP2.Y() - v.Y(), defaultP2.X() - v.X());
                 let diff = a2 - a1;
                 while(diff < 0) diff += 2*Math.PI;
-                if (diff > Math.PI) {
-                    let temp = p1; p1 = p2; p2 = temp;
+                if (diff > Math.PI) { let temp = defaultP1; defaultP1 = defaultP2; defaultP2 = temp; }
+                allPairs.push({ p1: defaultP1, p2: defaultP2, label: `∠${getPtName(defaultP1)}${getPtName(v)}${getPtName(defaultP2)}`, isDefault: true });
+            } else {
+                for(let i=0; i<n; i++) {
+                    for(let j=0; j<n; j++) {
+                        if (i === j) continue;
+                        let a1 = sorted[i].a, a2 = sorted[j].a;
+                        let diff = a2 - a1;
+                        while(diff <= 0) diff += 2*Math.PI; 
+                        
+                        if (diff <= Math.PI + 0.0001) { 
+                            let pA = sorted[i].p, pC = sorted[j].p;
+                            // 完美防止倒序平角重复入库 (如 ∠BDC 与 ∠CDB)
+                            let isDuplicate = allPairs.some(pair => (pair.p1 === pC && pair.p2 === pA));
+                            if (!isDuplicate) {
+                                let isDefault = (pA === defaultP1 && pC === defaultP2) || (pA === defaultP2 && pC === defaultP1);
+                                allPairs.push({ p1: pA, p2: pC, label: `∠${getPtName(pA)}${getPtName(v)}${getPtName(pC)}`, isDefault: isDefault });
+                            }
+                        }
+                    }
                 }
-                return {p1: p1, p2: p2};
+            }
+            return allPairs;
+        }
+
+        function findExistingAngle(v, p1, p2) {
+            for (let id in board.objects) {
+                let el = board.objects[id];
+                if (el.elType === 'angle' && el.vertexPoint === v) {
+                    if ((el.point1 === p1 && el.point3 === p2) || (el.point1 === p2 && el.point3 === p1)) return el;
+                }
             }
             return null;
         }
+
+        function openUnifiedAnglePanel(v, pairs, isFormulaMode) {
+            unifiedAngleContext = { v: v, pairs: pairs, isFormulaMode: isFormulaMode };
+            
+            let listEl = document.getElementById('unified-angle-list');
+            listEl.innerHTML = '';
+            let inputEl = document.getElementById('unified-angle-input');
+            let submitBtn = document.getElementById('unified-angle-submit-btn');
+            
+            pairs.forEach((pair, index) => {
+                let label = document.createElement('label');
+                label.className = "flex items-center justify-between text-sm text-gray-700 cursor-pointer p-1.5 hover:bg-blue-100 rounded transition-colors";
+                
+                let leftDiv = document.createElement('div');
+                leftDiv.className = "flex items-center space-x-2";
+                
+                let radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'unifiedAngleSelect';
+                radio.value = index;
+                
+                radio.onchange = () => {
+                    if (pair.existingAngle) {
+                        inputEl.value = pair.existingAngle.customLabel || '';
+                        submitBtn.innerText = '修改标记';
+                    } else {
+                        inputEl.value = ''; 
+                        submitBtn.innerText = '新建标记';
+                    }
+                    document.getElementById('unified-angle-error').classList.add('hidden');
+                };
+                
+                if (pair.isDefault) {
+                    radio.checked = true;
+                    if (pair.existingAngle) {
+                        inputEl.value = pair.existingAngle.customLabel || '';
+                        submitBtn.innerText = '修改标记';
+                    } else {
+                        inputEl.value = '';
+                        submitBtn.innerText = '新建标记';
+                    }
+                }
+                
+                let text = document.createElement('span');
+                text.innerText = pair.label;
+                text.className = "font-medium tracking-wide";
+                
+                leftDiv.appendChild(radio);
+                leftDiv.appendChild(text);
+                
+                let statusSpan = document.createElement('span');
+                if (pair.existingAngle) {
+                    statusSpan.innerText = `[已标: ${pair.existingAngle.customLabel || '弧线'}]`;
+                    statusSpan.className = "text-xs text-blue-600 bg-blue-50 px-1 border border-blue-200 rounded";
+                } else {
+                    statusSpan.innerText = "[未标]";
+                    statusSpan.className = "text-xs text-gray-400";
+                }
+                
+                label.appendChild(leftDiv);
+                label.appendChild(statusSpan);
+                listEl.appendChild(label);
+            });
+            
+            if (!pairs.some(p => p.isDefault) && pairs.length > 0) {
+                let firstRadio = listEl.querySelector('input[type="radio"]');
+                if (firstRadio) firstRadio.click();
+            }
+
+            document.getElementById('unified-angle-error').classList.add('hidden');
+            document.getElementById('unified-angle-panel').classList.remove('hidden');
+            setTimeout(() => { inputEl.focus(); inputEl.select(); }, 50);
+        }
+
+        function closeUnifiedAnglePanel() {
+            document.getElementById('unified-angle-panel').classList.add('hidden');
+            unifiedAngleContext = null;
+            if (!document.getElementById('prompt-modal').classList.contains('hidden')) {
+                document.getElementById('latex-input').focus();
+            }
+        }
+
+        function submitUnifiedAnglePanel() {
+            let val = document.getElementById('unified-angle-input').value.trim();
+            let selectedIdx = document.querySelector('input[name="unifiedAngleSelect"]:checked');
+            if (!selectedIdx) return;
+            
+            let pair = unifiedAngleContext.pairs[selectedIdx.value];
+            let v = unifiedAngleContext.v;
+            let isFormulaMode = unifiedAngleContext.isFormulaMode;
+            
+            let excludeId = pair.existingAngle ? pair.existingAngle.id : null;
+            if (val && isAngleNameDuplicate(val, excludeId)) {
+                let errEl = document.getElementById('unified-angle-error');
+                errEl.innerText = '⚠️ 名称在画板上已存在！';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            
+            let targetAngle = pair.existingAngle;
+            
+            // 【顶级文本显示与避让机制】如果输入字不等于顶点字，才在图上显示出来
+            let showLabel = false;
+            let displayName = '';
+            if (val) {
+                if (val.toUpperCase() !== (v.name || '').toUpperCase()) {
+                    showLabel = true;
+                    displayName = '\\(' + val + '\\)'; 
+                }
+            }
+            
+            if (targetAngle) {
+                targetAngle.customLabel = val || v.name || '';
+                targetAngle.setAttribute({name: displayName, withLabel: showLabel});
+                if(showLabel && targetAngle.label) { targetAngle.label.setAttribute({useMathJax: true}); }
+            } else {
+                let color = angleColors[angleColorIdx % angleColors.length]; angleColorIdx++;
+                targetAngle = board.create('angle', [pair.p1, v, pair.p2], {
+                    name: displayName, withLabel: showLabel, radius: 0.5, fillColor: color, strokeColor: color, 
+                    visible: isAnglesVisible, highlight: false,
+                    label: { useMathJax: true }
+                });
+                targetAngle.customLabel = val || v.name || ''; 
+                targetAngle.vertexPoint = v;
+            }
+            
+            board.update();
+            triggerSave();
+            
+            if (isFormulaMode) {
+                let inputEl = document.getElementById('latex-input');
+                inputEl.value += '\\angle ' + targetAngle.customLabel;
+                inputEl.focus();
+            }
+            closeUnifiedAnglePanel();
+        }
+        
+        // ================= 【核心绝杀：图论级子三角形着色引擎】 =================
+        function edgeExists(A, B) {
+            for (let id in board.objects) {
+                let el = board.objects[id];
+                if (el.elType === 'segment' || el.elType === 'line') {
+                    if (isPointOnLine(A, el) && isPointOnLine(B, el)) return true;
+                } else if (el.elType === 'polygon') {
+                    for(let i=0; i<el.borders.length; i++) {
+                        if (isPointOnLine(A, el.borders[i]) && isPointOnLine(B, el.borders[i])) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function isPointOnLine(P, lineEl) {
+            if (lineEl.point1 === P || lineEl.point2 === P) return true;
+            let p1 = lineEl.point1, p2 = lineEl.point2;
+            if (!p1 || !p2) return false;
+            let len = Math.hypot(p2.X() - p1.X(), p2.Y() - p1.Y());
+            if (len < 0.01) return false;
+            let cross = Math.abs((p2.Y() - p1.Y()) * (P.X() - p1.X()) - (p2.X() - p1.X()) * (P.Y() - p1.Y()));
+            if (cross / len < 0.1) {
+                if (lineEl.elType === 'line') return true;
+                let t = ((P.X() - p1.X()) * (p2.X() - p1.X()) + (P.Y() - p1.Y()) * (p2.Y() - p1.Y())) / (len * len);
+                if (t > -0.01 && t < 1.01) return true;
+            }
+            return false;
+        }
+
+        function isPointInTriangle(pt, A, B, C) {
+            function sign(p1, p2, p3) { return (p1[0] - p3.X()) * (p2.Y() - p3.Y()) - (p2.X() - p3.X()) * (p1[1] - p3.Y()); }
+            let d1 = sign(pt, A, B), d2 = sign(pt, B, C), d3 = sign(pt, C, A);
+            let has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+            let has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+            return !(has_neg && has_pos);
+        }
+
+        function findExistingPolygon(pts) {
+            for (let id in board.objects) {
+                let el = board.objects[id];
+                if (el.elType === 'polygon') {
+                    let v = el.vertices.slice(0, -1);
+                    if (v.length === pts.length && pts.every(p => v.includes(p))) return el;
+                }
+            }
+            return null;
+        }
+
+        function findPolygonRegions(clickCoords) {
+            let points = [];
+            for (let id in board.objects) {
+                let el = board.objects[id];
+                if (['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible) {
+                    points.push(el);
+                }
+            }
+            let candidates = [];
+            let n = points.length;
+            for(let i=0; i<n; i++) {
+                for(let j=i+1; j<n; j++) {
+                    for(let k=j+1; k<n; k++) {
+                        let A = points[i], B = points[j], C = points[k];
+                        if (edgeExists(A, B) && edgeExists(B, C) && edgeExists(C, A)) {
+                            if (isPointInTriangle(clickCoords, A, B, C)) {
+                                let area = Math.abs(A.X()*(B.Y()-C.Y()) + B.X()*(C.Y()-A.Y()) + C.X()*(A.Y()-B.Y())) / 2;
+                                if (area > 0.05) {
+                                    candidates.push({
+                                        pts: [A, B, C], area: area, 
+                                        label: `△${getPtName(A)}${getPtName(B)}${getPtName(C)}`,
+                                        existingPoly: findExistingPolygon([A, B, C])
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            candidates.sort((a,b) => a.area - b.area);
+            if (candidates.length > 0) candidates[0].isDefault = true;
+            return candidates;
+        }
+
+        function openUnifiedRegionPanel(candidates, selectedColor) {
+            unifiedRegionContext = { candidates: candidates, color: selectedColor };
+            let listEl = document.getElementById('unified-region-list');
+            listEl.innerHTML = '';
+            candidates.forEach((cand, index) => {
+                let label = document.createElement('label');
+                label.className = "flex items-center justify-between text-sm text-gray-700 cursor-pointer p-1.5 hover:bg-blue-100 rounded transition-colors";
+                let leftDiv = document.createElement('div');
+                leftDiv.className = "flex items-center space-x-2";
+                let radio = document.createElement('input');
+                radio.type = 'radio'; radio.name = 'unifiedRegionSelect'; radio.value = index;
+                if (cand.isDefault) radio.checked = true;
+                let text = document.createElement('span');
+                text.innerText = cand.label; text.className = "font-medium tracking-wide";
+                leftDiv.appendChild(radio); leftDiv.appendChild(text);
+                
+                let statusSpan = document.createElement('span');
+                if (cand.existingPoly && cand.existingPoly.visProp.fillopacity > 0) {
+                    statusSpan.innerText = "[已填充]";
+                    statusSpan.className = "text-xs text-blue-600 bg-blue-50 px-1 border border-blue-200 rounded";
+                } else {
+                    statusSpan.innerText = "[透明]";
+                    statusSpan.className = "text-xs text-gray-400";
+                }
+                
+                label.appendChild(leftDiv); label.appendChild(statusSpan);
+                listEl.appendChild(label);
+            });
+            document.getElementById('unified-region-panel').classList.remove('hidden');
+        }
+
+        function closeUnifiedRegionPanel() { 
+            document.getElementById('unified-region-panel').classList.add('hidden'); 
+            unifiedRegionContext = null; 
+        }
+
+        function submitUnifiedRegionPanel() {
+            let selectedIdx = document.querySelector('input[name="unifiedRegionSelect"]:checked');
+            if (!selectedIdx) return;
+            let cand = unifiedRegionContext.candidates[selectedIdx.value];
+            let color = unifiedRegionContext.color;
+            if (cand.existingPoly) {
+                cand.existingPoly.setAttribute({fillColor: color, fillOpacity: 0.2});
+            } else {
+                board.create('polygon', cand.pts, {
+                    fillColor: color, fillOpacity: 0.2, hasInnerPoints: true, highlight: false,
+                    withLines: false, borders: { strokeWidth: 0 } 
+                });
+            }
+            board.update(); triggerSave(); closeUnifiedRegionPanel();
+        }
+        // ====================================================================
 
         function bindBoardEvents() {
             board.on('move', function(e) {
@@ -647,43 +953,57 @@
                 let mouseX = coords[0], mouseY = coords[1]; 
 
                 if (currentMode === 'pointer' && activeLabel && activeLabelParent) {
-                    let dx = mouseX - labelDragStartUsr[0];
-                    let dy = mouseY - labelDragStartUsr[1];
-                    let px = dx * board.unitX;
-                    let py = -dy * board.unitY; 
-                    
-                    activeLabel.setAttribute({
-                        offset: [activeLabelStartOffset[0] + px, activeLabelStartOffset[1] + py]
-                    });
-                    hasDraggedGraphic = true; 
-                    board.update();
-                    return;
+                    let dx = mouseX - labelDragStartUsr[0]; let dy = mouseY - labelDragStartUsr[1];
+                    let px = dx * board.unitX; let py = -dy * board.unitY; 
+                    activeLabel.setAttribute({ offset: [activeLabelStartOffset[0] + px, activeLabelStartOffset[1] + py] });
+                    hasDraggedGraphic = true; board.update(); return;
                 }
 
-                if (currentMode === 'pointer') {
-                    if (board.mouse && board.mouse.obj) {
-                        hasDraggedGraphic = true;
+                if (currentMode === 'pointer') { if (board.mouse && board.mouse.obj) { hasDraggedGraphic = true; } }
+
+                // 【全局增强磁力锁定及连线预览追踪】
+                if ((currentMode === 'circle' || currentMode === 'line') && clickPoints.length === 1) {
+                    let pX = mouseX, pY = mouseY;
+                    let minDist = 30 / board.unitX; // 宽广的防手抖磁吸半径
+                    for (let id in board.objects) {
+                        let el = board.objects[id];
+                        // 核心：Point 和 Glider 全频段扫描
+                        if (['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible && el !== clickPoints[0]) {
+                            let d = Math.hypot(el.X() - mouseX, el.Y() - mouseY);
+                            if (d < minDist) {
+                                minDist = d;
+                                pX = el.X();
+                                pY = el.Y();
+                            }
+                        }
+                    }
+
+                    if (!shapePreviewPoint) {
+                        shapePreviewPoint = board.create('point', [pX, pY], {visible: false});
+                        if (currentMode === 'circle') {
+                            shapePreviewRadius = board.create('segment', [clickPoints[0], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#6b7280'});
+                            shapePreviewObj = board.create('circle', [clickPoints[0], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#9ca3af', fillColor: 'none', highlight: false});
+                        } else {
+                            let selectedColor = document.getElementById('color-picker').value;
+                            shapePreviewObj = board.create('segment', [clickPoints[0], shapePreviewPoint], {strokeWidth: 2, strokeColor: selectedColor, dash: 2, highlight: false});
+                        }
+                    } else {
+                        shapePreviewPoint.moveTo([pX, pY]); board.update();
                     }
                 }
 
-                if (currentMode === 'circle' && clickPoints.length === 1) {
-                    if (!circlePreviewPoint) {
-                        circlePreviewPoint = board.create('point', [mouseX, mouseY], {visible: false});
-                        circlePreviewRadius = board.create('segment', [clickPoints[0], circlePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#6b7280'});
-                        // 预览圆去除高亮屏蔽，让它能正常感应
-                        circlePreviewObj = board.create('circle', [clickPoints[0], circlePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#9ca3af', fillColor: 'none'});
-                    } else {
-                        circlePreviewPoint.moveTo([mouseX, mouseY]);
+                if (currentMode !== 'point') { 
+                    if (snapPreviewPoint) {
+                        snapPreviewPoint.moveTo([9999, 9999]); 
+                        snapPreviewPoint.name = '吸附';
+                        if (snapPreviewPoint.label) snapPreviewPoint.label.setText('吸附');
                         board.update();
                     }
+                    activeSnapSegment = null; 
+                    return; 
                 }
 
-                if (currentMode !== 'point') {
-                    if (snapPreviewPoint) snapPreviewPoint.moveTo([9999, 9999]); 
-                    return;
-                }
-
-                let closestSegment = null, minDistance = 0.8, bestT = -1;
+                let closestSegment = null, minDistLine = 0.8, bestT = -1;
                 for (let id in board.objects) {
                     let el = board.objects[id];
                     if ((el.elType === 'line' || el.elType === 'segment') && el.point1 && el.point2) {
@@ -695,40 +1015,37 @@
                             if (t >= 0.02 && t <= 0.98) {
                                 let projX = p1.X() + t * dx, projY = p1.Y() + t * dy;
                                 let dist = Math.hypot(mouseX - projX, mouseY - projY);
-                                if (dist < minDistance) {
-                                    minDistance = dist; closestSegment = el; bestT = t;
-                                }
+                                if (dist < minDistLine) { minDistLine = dist; closestSegment = el; bestT = t; }
                             }
                         }
                     }
                 }
 
                 if (closestSegment) {
+                    activeSnapSegment = closestSegment; 
                     let p1 = closestSegment.point1, p2 = closestSegment.point2;
-                    let length = Math.hypot(p2.X() - p1.X(), p2.Y() - p1.Y());
-                    
-                    // 【精细化找回短长比例公式】
                     let shortRatio = Math.min(bestT, 1 - bestT);
                     let bestFraction = null, snapT = bestT; 
                     const fractions = [{t: 1/2, label: '1/2'}, {t: 1/3, label: '1/3'}, {t: 2/3, label: '1/3'}, {t: 1/4, label: '1/4'}, {t: 3/4, label: '1/4'}, {t: 1/5, label: '1/5'}, {t: 4/5, label: '1/5'}, {t: 2/5, label: '2/5'}, {t: 3/5, label: '2/5'}];
-                    let snapTolerance = 0.8 / length; 
-                    
-                    for (let f of fractions) {
-                        if (Math.abs(bestT - f.t) < snapTolerance) { bestFraction = f; snapT = f.t; break; }
-                    }
+                    let snapTolerance = 0.8 / Math.hypot(p2.X() - p1.X(), p2.Y() - p1.Y()); 
+                    for (let f of fractions) { if (Math.abs(bestT - f.t) < snapTolerance) { bestFraction = f; snapT = f.t; break; } }
                     
                     let displayLabel = bestFraction ? ('短/总 = ' + bestFraction.label) : ('短/总 ≈ ' + shortRatio.toFixed(2));
                     let snapX = p1.X() + snapT * (p2.X() - p1.X()), snapY = p1.Y() + snapT * (p2.Y() - p1.Y());
-                    
                     if (snapPreviewPoint) {
                         snapPreviewPoint.moveTo([snapX, snapY]);
                         snapPreviewPoint.name = displayLabel;
-                        // 强制通过setText写入使得底层引擎必刷新
                         if (snapPreviewPoint.label) snapPreviewPoint.label.setText(displayLabel);
                         board.update(); 
                     }
                 } else {
-                    if (snapPreviewPoint) { snapPreviewPoint.moveTo([9999, 9999]); board.update(); }
+                    activeSnapSegment = null;
+                    if (snapPreviewPoint) { 
+                        snapPreviewPoint.moveTo([9999, 9999]); 
+                        snapPreviewPoint.name = '吸附';
+                        if (snapPreviewPoint.label) snapPreviewPoint.label.setText('吸附');
+                        board.update(); 
+                    }
                 }
             });
 
@@ -740,42 +1057,31 @@
                     let targetTypes = ['line', 'segment', 'circle', 'angle'];
                     let target = els.find(el => targetTypes.includes(el.elType) && el.visProp.visible);
                     if (target) {
-                        let currentDash = target.visProp.dash || 0;
-                        target.setAttribute({dash: currentDash === 0 ? 2 : 0});
-                        board.update();
-                        triggerSave(); 
+                        let currentDash = target.visProp.dash || 0; target.setAttribute({dash: currentDash === 0 ? 2 : 0});
+                        board.update(); triggerSave(); 
                     }
                     return; 
                 }
 
                 if (currentMode === 'pointer') {
                     let els = board.getAllObjectsUnderMouse(e);
-                    let targetNode = e.target || e.srcElement;
-                    let textEl = null;
+                    let targetNode = e.target || e.srcElement; let textEl = null;
 
                     for (let i = 0; i < els.length; i++) {
-                        let el = els[i];
-                        let cssStr = (el.visProp.cssclass || el.visProp.cssClass || '');
+                        let el = els[i]; let cssStr = (el.visProp.cssclass || el.visProp.cssClass || '');
                         if (el.elType === 'text' && !cssStr.includes('static-text') && !cssStr.includes('snap-label')) {
-                            if (el.rendNode && el.rendNode.contains(targetNode)) {
-                                textEl = el; break;
-                            }
+                            if (el.rendNode && el.rendNode.contains(targetNode)) { textEl = el; break; }
                         }
                     }
                     
                     if (textEl) {
                         let parent = Object.values(board.objects).find(obj => obj.label === textEl);
                         if (!parent && textEl.parent) parent = textEl.parent; 
-                        
                         if (parent) {
-                            activeLabel = textEl;
-                            activeLabelParent = parent;
-                            labelDragStartUsr = board.getUsrCoordsOfMouse(e);
-                            activeLabelStartOffset = [...activeLabel.visProp.offset];
-                            parent.setAttribute({fixed: true});
-                            if (board.mouse) board.mouse.obj = null;
-                            board.dehighlightAll();
-                            return; 
+                            activeLabel = textEl; activeLabelParent = parent;
+                            labelDragStartUsr = board.getUsrCoordsOfMouse(e); activeLabelStartOffset = [...activeLabel.visProp.offset];
+                            parent.setAttribute({fixed: true}); if (board.mouse) board.mouse.obj = null;
+                            board.dehighlightAll(); return; 
                         }
                     }
                     return; 
@@ -787,70 +1093,68 @@
                 let actualClickCoords = [coords[0], coords[1]];
                 let els = board.getAllObjectsUnderMouse(e);
                 
+                // 【核心：全系吸附点捕获，彻底消灭幽灵点 F】
                 let isPointUnderMouse = false, clickedPoint = null;
                 for (let i = 0; i < els.length; i++) {
-                    if (els[i].elType === 'point' && els[i] !== snapPreviewPoint && els[i] !== circlePreviewPoint) {
+                    if (['point', 'glider'].includes(els[i].elType) && els[i] !== snapPreviewPoint && els[i] !== shapePreviewPoint && els[i].visProp.visible) {
                         isPointUnderMouse = true; clickedPoint = els[i]; break;
+                    }
+                }
+                if (!isPointUnderMouse) {
+                    let minDist = 30 / board.unitX; 
+                    for (let id in board.objects) {
+                        let el = board.objects[id];
+                        if (['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible) {
+                            let d = Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]);
+                            if (d < minDist) {
+                                minDist = d;
+                                isPointUnderMouse = true;
+                                clickedPoint = el;
+                            }
+                        }
                     }
                 }
 
                 let promptModal = document.getElementById('prompt-modal');
                 if (!promptModal.classList.contains('hidden')) {
-                    let targetAngle = null, minAngDist = 1.5; 
+                    let targetAngle = null; 
                     for (let id in board.objects) {
                         let obj = board.objects[id];
                         if (obj.elType === 'angle' && obj.visProp.visible && obj.vertexPoint) {
                             let dist = Math.hypot(actualClickCoords[0] - obj.vertexPoint.X(), actualClickCoords[1] - obj.vertexPoint.Y());
-                            if (dist < minAngDist) { minAngDist = dist; targetAngle = obj; }
+                            if (dist < 1.5) { targetAngle = obj; break; }
                         }
                     }
                     if (targetAngle) {
-                        let aName = targetAngle.customLabel || targetAngle.vertexPoint.name || '';
-                        document.getElementById('latex-input').value += '\\angle ' + aName;
+                        document.getElementById('latex-input').value += '\\angle ' + (targetAngle.customLabel || targetAngle.vertexPoint.name || '');
                         document.getElementById('latex-input').focus();
                         return;
                     } 
                     
                     let potentialVertex = clickedPoint;
                     if (!potentialVertex) {
-                        let minDist = 2.0; 
                         for(let id in board.objects) {
                             let el = board.objects[id];
-                            if (el.elType === 'point') {
-                                let d = Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]);
-                                if (d < minDist) { minDist = d; potentialVertex = el; }
+                            if (['point', 'glider'].includes(el.elType)) {
+                                if (Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]) < 2.0) { potentialVertex = el; break; }
                             }
                         }
                     }
                     if (potentialVertex) {
-                        let anglePts = getAnglePointsFromVertex(potentialVertex, actualClickCoords);
-                        if (anglePts) {
-                            openGenericModal("智能标角并拾取", "检测到未标记的角，请输入名称", potentialVertex.name || "", function(val) {
-                                let trimVal = val.trim();
-                                if (trimVal && isAngleNameDuplicate(trimVal, null)) {
-                                    showGenericError('⚠️ 该角名称已存在！'); return false; 
-                                }
-                                let color = angleColors[angleColorIdx % angleColors.length]; angleColorIdx++;
-                                let ang = board.create('angle', [anglePts.p1, potentialVertex, anglePts.p2], {
-                                    name: '', withLabel: false, radius: 0.5, fillColor: color, strokeColor: color, visible: isAnglesVisible
-                                });
-                                ang.customLabel = trimVal || potentialVertex.name || ''; ang.vertexPoint = potentialVertex; 
-                                board.update();
-                                document.getElementById('latex-input').value += '\\angle ' + ang.customLabel;
-                                document.getElementById('latex-input').focus();
-                                triggerSave(); 
-                                return true;
-                            });
+                        let pairs = getAllAnglesFromVertex(potentialVertex, actualClickCoords);
+                        if (pairs && pairs.length > 0) {
+                            pairs.forEach(p => p.existingAngle = findExistingAngle(potentialVertex, p.p1, p.p2));
+                            openUnifiedAnglePanel(potentialVertex, pairs, true);
                             return; 
                         }
                     }
                     
-                    let target = els.find(el => ['segment', 'line'].includes(el.elType)) || els.find(el => el.elType === 'point');
+                    let target = els.find(el => ['segment', 'line'].includes(el.elType)) || els.find(el => ['point', 'glider'].includes(el.elType));
                     if (!target && els[0] && els[0].elType !== 'text') target = els[0];
                     if (target) {
                         let insertStr = '';
-                        if (target.elType === 'line' || target.elType === 'segment') insertStr = (target.point1 ? target.point1.name : '') + (target.point2 ? target.point2.name : '');
-                        else if (target.elType === 'point') insertStr = target.name;
+                        if (target.elType === 'line' || target.elType === 'segment') insertStr = (target.point1 ? getPtName(target.point1) : '') + (target.point2 ? getPtName(target.point2) : '');
+                        else if (['point', 'glider'].includes(target.elType)) insertStr = getPtName(target);
                         if (insertStr) { document.getElementById('latex-input').value += insertStr; document.getElementById('latex-input').focus(); return; }
                     }
                     pendingTextCoords = actualClickCoords;
@@ -858,52 +1162,36 @@
                 }
 
                 if (currentMode === 'markAngle') {
-                    let targetAngle = null, minAngDist = 1.5; 
-                    for(let id in board.objects) {
-                        let el = board.objects[id];
-                        if (el.elType === 'angle' && el.visProp.visible && el.vertexPoint) {
-                            let d = Math.hypot(el.vertexPoint.X() - actualClickCoords[0], el.vertexPoint.Y() - actualClickCoords[1]);
-                            if (d < minAngDist) { minAngDist = d; targetAngle = el; }
-                        }
-                    }
-                    if (targetAngle) {
-                        openGenericModal("重新标记角度", "请输入新的角名字", targetAngle.customLabel || "", function(val) {
-                            let trimVal = val.trim();
-                            if (trimVal && isAngleNameDuplicate(trimVal, targetAngle.id)) { showGenericError('⚠️ 该角名称已存在！'); return false; }
-                            targetAngle.customLabel = trimVal || targetAngle.vertexPoint.name || '';
-                            board.update();
-                            triggerSave(); 
-                            return true;
-                        });
-                        return;
-                    }
-
                     let v = clickedPoint;
                     if (!v) {
-                        let minDist = 2.0; 
                         for(let id in board.objects) {
                             let el = board.objects[id];
-                            if (el.elType === 'point') {
-                                let d = Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]);
-                                if (d < minDist) { minDist = d; v = el; }
+                            if (['point', 'glider'].includes(el.elType)) {
+                                if (Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]) < 2.0) { v = el; break; }
                             }
                         }
                     }
+                    
                     if (v) {
-                        let anglePts = getAnglePointsFromVertex(v, actualClickCoords);
-                        if (anglePts) {
-                            openGenericModal("标记角度", "请输入角的名字", v.name || "", function(val) {
-                                let trimVal = val.trim();
-                                if (trimVal && isAngleNameDuplicate(trimVal, null)) { showGenericError('⚠️ 该角名称已存在！'); return false; }
-                                let color = angleColors[angleColorIdx % angleColors.length]; angleColorIdx++;
-                                let ang = board.create('angle', [anglePts.p1, v, anglePts.p2], {
-                                    name: '', withLabel: false, radius: 0.5, fillColor: color, strokeColor: color, visible: isAnglesVisible
-                                });
-                                ang.customLabel = trimVal || v.name || ''; ang.vertexPoint = v; 
-                                board.update();
-                                triggerSave(); 
-                                return true;
+                        let pairs = getAllAnglesFromVertex(v, actualClickCoords);
+                        if (pairs && pairs.length > 0) {
+                            let clickedExistingAngle = null;
+                            for (let id in board.objects) {
+                                let obj = board.objects[id];
+                                if (obj.elType === 'angle' && obj.visProp.visible && obj.vertexPoint === v) {
+                                    let dist = Math.hypot(actualClickCoords[0] - v.X(), actualClickCoords[1] - v.Y());
+                                    if (dist < 1.5) { clickedExistingAngle = obj; break; }
+                                }
+                            }
+
+                            pairs.forEach(p => {
+                                p.existingAngle = findExistingAngle(v, p.p1, p.p2);
+                                if (clickedExistingAngle && p.existingAngle === clickedExistingAngle) {
+                                    pairs.forEach(pp => pp.isDefault = false); 
+                                    p.isDefault = true;
+                                }
                             });
+                            openUnifiedAnglePanel(v, pairs, false); 
                         }
                     }
                     return; 
@@ -912,25 +1200,53 @@
                 if (currentMode === 'color') {
                     if (els.length > 0) {
                         let selectedColor = document.getElementById('color-picker').value;
-                        let target = els.find(el => el.elType !== 'point') || els[0];
-                        target.setAttribute({strokeColor: selectedColor});
-                        if (target.hasPoint || target.elType === 'angle' || target.elType === 'circle') target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
-                        board.update();
-                        triggerSave(); 
+                        
+                        // 优先尝试找 线段、圆、角 进行局部上色
+                        let target = els.find(el => ['segment', 'line'].includes(el.elType)) || 
+                                     els.find(el => el.elType === 'circle') || 
+                                     els.find(el => el.elType === 'angle');
+                        
+                        if (target) {
+                            target.setAttribute({strokeColor: selectedColor});
+                            if (target.hasPoint || target.elType === 'angle' || target.elType === 'circle') target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
+                            board.update();
+                            triggerSave(); 
+                            return;
+                        }
+                        
+                        // 【终极重构：如果点在空白的图形区间，启动子区域探测引擎】
+                        let candidates = findPolygonRegions(actualClickCoords);
+                        if (candidates.length > 0) {
+                            openUnifiedRegionPanel(candidates, selectedColor);
+                            return;
+                        }
+                        
+                        // 兜底方案
+                        target = els.find(el => !['point', 'glider'].includes(el.elType)) || els[0];
+                        if (target) {
+                            target.setAttribute({strokeColor: selectedColor});
+                            if (target.elType === 'polygon') {
+                                target.setAttribute({fillColor: selectedColor, fillOpacity: 0.2});
+                            } else if (target.hasPoint || target.elType === 'angle' || target.elType === 'circle') {
+                                target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
+                            }
+                            board.update();
+                            triggerSave(); 
+                        }
                     }
                     return; 
                 }
                 else if (currentMode === 'eraser') {
                     if (els.length > 0) {
-                        const targetTypes = ['point', 'line', 'segment', 'circle', 'polygon', 'angle', 'text', 'midpoint'];
-                        let validTargets = els.filter(el => targetTypes.includes(el.elType) && el !== snapPreviewPoint && el !== circlePreviewPoint && el.visProp.visible && !(el.id.includes('ticks') || el.id.includes('Axes')));
+                        const targetTypes = ['point', 'glider', 'line', 'segment', 'circle', 'polygon', 'angle', 'text', 'midpoint'];
+                        let validTargets = els.filter(el => targetTypes.includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible && !(el.id.includes('ticks') || el.id.includes('Axes')));
                         if (validTargets.length === 1) {
                             board.removeObject(validTargets[0]); board.update();
                             triggerSave(); 
                         } else if (validTargets.length > 1) {
                             let items = validTargets.map(el => {
                                 let desc = '未知元素';
-                                if (el.elType === 'point') desc = '点 ' + (el.name || '');
+                                if (['point', 'glider'].includes(el.elType)) desc = '点 ' + getPtName(el);
                                 else if (el.elType === 'segment') desc = '线段';
                                 else if (el.elType === 'line') desc = '直线';
                                 else if (el.elType === 'polygon') desc = '多边形';
@@ -950,10 +1266,27 @@
                 else if (currentMode === 'point') {
                     if (!isPointUnderMouse) {
                         let finalCoords = (snapPreviewPoint && snapPreviewPoint.X() !== 9999) ? [snapPreviewPoint.X(), snapPreviewPoint.Y()] : actualClickCoords;
+                        
+                        let currentSlideObj = activeSnapSegment; 
+                        
                         openGenericModal("命名控制点", "请输入点的字母", String.fromCharCode(pointCharCode), function(val) {
                             let nameToUse = val.trim().toUpperCase(); updatePointCharCode(nameToUse);
-                            board.create('point', finalCoords, { size: 4, name: nameToUse, fillColor: '#ef4444', strokeColor: 'white', visible: isPointsVisible, withLabel: nameToUse !== '', label: { offset: [15, 15] } });
-                            if (snapPreviewPoint) { snapPreviewPoint.moveTo([9999, 9999]); board.update(); }
+                            let props = { size: 4, name: nameToUse, fillColor: '#ef4444', strokeColor: 'white', visible: isPointsVisible, withLabel: nameToUse !== '', label: { offset: [15, 15] } };
+                            
+                            // 【终极寄生】：只要是在线段上点的，统统创建为 Glider（游标）
+                            if (currentSlideObj) { 
+                                board.create('glider', [finalCoords[0], finalCoords[1], currentSlideObj], props);
+                            } else {
+                                board.create('point', finalCoords, props);
+                            }
+                            
+                            if (snapPreviewPoint) { 
+                                snapPreviewPoint.moveTo([9999, 9999]); 
+                                snapPreviewPoint.name = '吸附';
+                                if (snapPreviewPoint.label) snapPreviewPoint.label.setText('吸附');
+                                board.update(); 
+                            }
+                            activeSnapSegment = null;
                             triggerSave(); 
                             return true;
                         });
@@ -967,14 +1300,13 @@
                 }
                 else {
                     let p;
+                    // 【全频段双重捕获】，保证连线 100% 连接已有对象！
                     if (isPointUnderMouse) {
                         p = clickedPoint; 
                         if (currentMode === 'polygon' && clickPoints.length >= 2 && p === clickPoints[0]) {
                             let selectedColor = document.getElementById('color-picker').value;
-                            // 多边形面不高亮，但允许其受到点击抓取
                             board.create('polygon', clickPoints, {
-                                fillColor: selectedColor, fillOpacity: 0.2, hasInnerPoints: true, highlightFillColor: selectedColor, highlightFillOpacity: 0.2, 
-                                borders: { strokeColor: selectedColor, strokeWidth: 2, fixed: true }
+                                fillColor: 'none', fillOpacity: 0, hasInnerPoints: true, highlightFillColor: 'none', highlightFillOpacity: 0, borders: { strokeColor: selectedColor, strokeWidth: 2, fixed: true }
                             });
                             tempLines.forEach(line => board.removeObject(line)); tempLines = []; clickPoints = [];
                             triggerSave(); 
@@ -983,7 +1315,14 @@
                     } else {
                         let isCircleCenter = (currentMode === 'circle' && clickPoints.length === 0);
                         let autoName = getNextAutoPointName(isCircleCenter);
-                        p = board.create('point', actualClickCoords, { size: 3, name: autoName, fillColor: '#3b82f6', visible: isPointsVisible, withLabel: true, label: { offset: [15, 15] } });
+                        let props = { size: 3, name: autoName, fillColor: '#3b82f6', visible: isPointsVisible, withLabel: true, label: { offset: [15, 15] } };
+                        let finalCoords = (shapePreviewPoint && shapePreviewPoint.X() !== 9999) ? [shapePreviewPoint.X(), shapePreviewPoint.Y()] : actualClickCoords;
+                        
+                        if (activeSnapSegment) {
+                            p = board.create('glider', [finalCoords[0], finalCoords[1], activeSnapSegment], props);
+                        } else {
+                            p = board.create('point', finalCoords, props);
+                        }
                         if(currentMode !== 'circle' && currentMode !== 'line' && currentMode !== 'polygon') triggerSave();
                     }
                     clickPoints.push(p);
@@ -995,16 +1334,15 @@
 
                     if (currentMode === 'line' && clickPoints.length === 2) {
                         let selectedColor = document.getElementById('color-picker').value;
-                        // 取消 highlight: false，让线段能够高亮！
+                        if (shapePreviewObj) { board.removeObject(shapePreviewObj); board.removeObject(shapePreviewPoint); shapePreviewObj = null; shapePreviewPoint = null; }
+                        
                         board.create('segment', [clickPoints[0], clickPoints[1]], { strokeWidth: 2, strokeColor: selectedColor });
                         clickPoints = [];
                         triggerSave(); 
                     }
                     else if (currentMode === 'circle' && clickPoints.length === 2) {
                         let selectedColor = document.getElementById('color-picker').value;
-                        board.removeObject(circlePreviewObj); board.removeObject(circlePreviewRadius); board.removeObject(circlePreviewPoint);
-                        circlePreviewObj = null; circlePreviewPoint = null; circlePreviewRadius = null;
-                        // 取消 highlight: false，让圆边能够高亮！
+                        if (shapePreviewObj) { board.removeObject(shapePreviewObj); board.removeObject(shapePreviewPoint); board.removeObject(shapePreviewRadius); shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null; }
                         board.create('circle', [clickPoints[0], clickPoints[1]], { strokeWidth: 2, strokeColor: selectedColor, fillColor: selectedColor, fillOpacity: 0.1 });
                         clickPoints = [];
                         triggerSave(); 
@@ -1060,7 +1398,7 @@
         function executeClearBoard() {
             closeConfirmModal();
             JXG.JSXGraph.freeBoard(board); document.getElementById('jxgbox').innerHTML = '';
-            clickPoints = []; tempLines = []; circlePreviewObj = null; circlePreviewPoint = null; circlePreviewRadius = null;
+            clickPoints = []; tempLines = []; shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null;
             angleColorIdx = 1; pointCharCode = 68; 
             isAxesVisible = true; isPointsVisible = true; isAnglesVisible = true;
             document.getElementById('btn-toggle-axes').innerText = '👁️ 坐标';
@@ -1068,7 +1406,10 @@
             document.getElementById('btn-toggle-angles').innerText = '👁️ 隐藏角';
             setMode('pointer');
             
-            startupApp(); 
+            initBoardCore(); recreatePreviewSystem(); bindBoardEvents();
+            
+            historyStack = []; historyIndex = -1;
+            setTimeout(() => { executeSaveHistory(); }, 200);
         }
 
         function closePromptModal() {
@@ -1127,16 +1468,10 @@
             const pB = board.create('point', [-4, -2], { name: 'B', size: 5, color: '#dc2626', label: { offset: [-20, -15] } });
             const pC = board.create('point', [4, -2], { name: 'C', size: 5, color: '#dc2626', label: { offset: [15, -15] } });
 
-            // 【高亮修复】：多边形面不高亮，但允许其边缘发生自然的感应高亮
-            board.create('polygon', [pA, pB, pC], { 
-                fillColor: '#fef2f2', fillOpacity: 0.6, hasInnerPoints: true, 
-                highlightFillColor: '#fef2f2', highlightFillOpacity: 0.6, 
-                borders: { strokeColor: '#b91c1c', strokeWidth: 2, fixed: true } 
-            });
+            board.create('polygon', [pA, pB, pC], { fillColor: 'none', fillOpacity: 0, hasInnerPoints: true, highlight: false, borders: { strokeColor: '#b91c1c', strokeWidth: 2, fixed: true, highlight: false } });
 
-            // 扇形也允许被高亮选中了
             const angleA = board.create('angle', [pB, pA, pC], {
-                name: '', withLabel: false, radius: 0.5, fillColor: '#fca5a5', strokeColor: '#dc2626'
+                name: '', withLabel: false, radius: 0.5, fillColor: '#fca5a5', strokeColor: '#dc2626', highlight: false, label: { useMathJax: true }
             });
             angleA.customLabel = 'A'; angleA.vertexPoint = pA;
         }
@@ -1145,11 +1480,17 @@
             currentMode = mode;
             clickPoints = []; 
             if (tempLines.length > 0) { tempLines.forEach(l => board.removeObject(l)); tempLines = []; }
-            if (circlePreviewObj) {
-                board.removeObject(circlePreviewObj); board.removeObject(circlePreviewPoint); board.removeObject(circlePreviewRadius);
-                circlePreviewObj = null; circlePreviewPoint = null; circlePreviewRadius = null;
+            if (shapePreviewObj) {
+                board.removeObject(shapePreviewObj); board.removeObject(shapePreviewPoint); 
+                if (shapePreviewRadius) board.removeObject(shapePreviewRadius);
+                shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null;
             }
-            if (mode !== 'point' && snapPreviewPoint) { snapPreviewPoint.moveTo([9999, 9999]); activeSnapPoint = null; }
+            if (mode !== 'point' && snapPreviewPoint) { 
+                snapPreviewPoint.moveTo([9999, 9999]); 
+                snapPreviewPoint.name = '吸附';
+                if (snapPreviewPoint.label) snapPreviewPoint.label.setText('吸附');
+                activeSnapPoint = null; activeSnapSegment = null; 
+            }
 
             if (board && board.attr && board.attr.pan) { board.attr.pan.enabled = (mode === 'pan'); }
 
@@ -1173,13 +1514,13 @@
             const messages = {
                 'pointer': '当前模式：选择。拖拽图形内部可平移，拖拽顶点变形，拖拽字母可单独调整文字位置。',
                 'pan': '当前模式：漫游。在画布空白处按住鼠标左键即可随意移动视角。所有模式均支持滚轮缩放。',
-                'point': '当前模式：加点。靠近线段自动吸附（显示比例），支持连按回车按字母顺序自动递增。',
+                'point': '当前模式：加点。靠近线段自动吸附绑定，支持连按回车按字母顺序自动递增。',
                 'line': '当前模式：连线。连续点击两个位置以绘制一条线段。',
                 'circle': '当前模式：画圆。点击确定圆心(默认O)，拖动鼠标出现虚线预览，再次点击确定半径。',
                 'polygon': '当前模式：多边形。依次点击各个顶点，最后回到起点点击以闭合多边形。',
-                'markAngle': '当前模式：标角。直接点击你想标记的“角内部”，可新增或重命名角度标记。',
+                'markAngle': '当前模式：标角。点击角内部，自动出全能面板（包含修改与多角选择）。',
                 'text': '当前模式：公式。点击【角/线段/点】会自动飞入公式；点击【未标的角】可自动创建扇形并录入！',
-                'color': '当前模式：改色。从工具栏选好颜色后，将鼠标移至线段或图形(会有高亮提示)点击即可变色。',
+                'color': '当前模式：改色。选定颜色后，点击任意“线条”上色，或点击“子三角形”的空白面进行填充！',
                 'eraser': '当前模式：擦除。点击画板上的任意元素将其删除。重叠时将弹窗询问。'
             };
             statusBar.innerText = messages[mode];
@@ -1197,7 +1538,7 @@
             isPointsVisible = !isPointsVisible;
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (el.elType === 'point' && el !== snapPreviewPoint && el !== circlePreviewPoint) el.setAttribute({visible: isPointsVisible});
+                if (['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint) el.setAttribute({visible: isPointsVisible});
             }
             board.update();
             document.getElementById('btn-toggle-points').innerText = isPointsVisible ? '👁️ 隐藏点' : '🙈 显示点';
