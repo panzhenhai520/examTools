@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>互动几何出题画板 (JSXGraph + MathJax)</title>
     
-    <!-- 引入 Tailwind CSS 用于快速构建 UI 这是新版本-->
+    <!-- 引入 Tailwind CSS 用于快速构建 UI -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- 引入 JSXGraph 核心库与样式 -->
@@ -30,6 +30,7 @@
     <style>
         .JXGtext { user-select: none; }
         .static-text { pointer-events: none; }
+        .angle-label { pointer-events: none; z-index: 50; }
 
         .snap-label {
             background-color: #fffbeb; 
@@ -46,18 +47,14 @@
             z-index: 1000 !important; 
         }
 
-        /* 专属工具鼠标指针 */
         .cursor-default-cross { cursor: crosshair !important; }
         .cursor-pointer-mode { cursor: default !important; }
         .cursor-pointer-mode svg [cursor="pointer"],
         .cursor-pointer-mode svg [cursor="move"] { cursor: move !important; }
-        .cursor-pointer-mode .JXGtext:not(.static-text):not(.snap-label) { cursor: move !important; }
+        .cursor-pointer-mode .JXGtext:not(.static-text):not(.snap-label):not(.angle-label) { cursor: move !important; }
         .cursor-pointer-mode .draggable-text { cursor: move !important; }
-        
-        /* 漫游工具指针 */
         .cursor-pan { cursor: grab !important; }
         .cursor-pan:active { cursor: grabbing !important; }
-
         .cursor-eraser { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='%23fee2e2' stroke='%23ef4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 20H7L3 16C2.5 15.5 2.5 14.5 3 14L13 4C13.5 3.5 14.5 3.5 15 4L20 9C20.5 9.5 20.5 10.5 20 11L11 20'/%3E%3C/svg%3E") 2 22, crosshair !important; }
         .cursor-angle { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 20h18'/%3E%3Cpath d='M3 20L15 4'/%3E%3Cpath d='M8 20c0-2.8 2.2-5 5-5'/%3E%3C/svg%3E") 3 20, crosshair !important; }
     </style>
@@ -74,22 +71,10 @@
                     <input type="number" id="setting-tick" value="1" step="0.5" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
                 <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">X轴 最小值</label>
-                        <input type="number" id="setting-xmin" value="-10" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">X轴 最大值</label>
-                        <input type="number" id="setting-xmax" value="10" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Y轴 最小值</label>
-                        <input type="number" id="setting-ymin" value="-8" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Y轴 最大值</label>
-                        <input type="number" id="setting-ymax" value="8" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">X轴 最小值</label><input type="number" id="setting-xmin" value="-10" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">X轴 最大值</label><input type="number" id="setting-xmax" value="10" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Y轴 最小值</label><input type="number" id="setting-ymin" value="-8" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Y轴 最大值</label><input type="number" id="setting-ymax" value="8" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
                 </div>
             </div>
             <div class="flex justify-end space-x-3">
@@ -111,7 +96,7 @@
         </div>
     </div>
 
-    <!-- 通用文本输入弹窗 -->
+    <!-- 仅用于加点命名的通用弹窗 -->
     <div id="generic-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center transition-opacity">
         <div class="bg-white rounded-lg p-6 w-80 shadow-2xl transform transition-transform scale-100">
             <h3 id="generic-modal-title" class="text-lg font-bold text-gray-800 mb-2">输入标记</h3>
@@ -125,7 +110,7 @@
         </div>
     </div>
 
-    <!-- 【防遮挡的悬浮角选择与修改大一统面板】 -->
+    <!-- 防遮挡的悬浮角选择与修改大一统面板 -->
     <div id="unified-angle-panel" class="hidden fixed top-24 left-4 z-50 transition-opacity shadow-2xl">
         <div class="bg-white rounded-lg p-5 w-80 border border-gray-200">
             <div class="flex justify-between items-center mb-2">
@@ -142,7 +127,7 @@
         </div>
     </div>
 
-    <!-- 【神级挂载：多边形/子区域填充提取面板】 -->
+    <!-- 多边形/子区域填充提取面板 -->
     <div id="unified-region-panel" class="hidden fixed top-24 left-4 z-50 transition-opacity shadow-2xl">
         <div class="bg-white rounded-lg p-5 w-80 border border-gray-200">
             <div class="flex justify-between items-center mb-2">
@@ -157,14 +142,14 @@
         </div>
     </div>
 
-    <!-- 输入公式浮动面板 -->
+    <!-- 公式浮动面板 -->
     <div id="prompt-modal" class="hidden fixed bottom-12 right-8 z-50 transition-opacity shadow-2xl">
         <div class="bg-white rounded-lg p-5 w-96 border border-gray-200">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-md font-bold text-gray-800">🔤 公式编辑器</h3>
                 <span class="text-xs text-blue-600 bg-blue-50 border border-blue-100 px-2 py-1 rounded">🖱️ 智能联动激活</span>
             </div>
-            <p class="text-xs text-gray-500 mb-2">直接点击画板元素自动录入公式。如果点击<b>未标记的角</b>，将自动弹出左侧选角面板并完成录入。</p>
+            <p class="text-xs text-gray-500 mb-2">直接点击线段或顶点自动录入名称。点击角所在区域将弹出精准拾取面板。</p>
             <input type="text" id="latex-input" class="w-full border border-gray-300 rounded-md p-3 mb-4 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value="">
             <div class="flex justify-end space-x-3">
                 <button onclick="closePromptModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition">取消</button>
@@ -193,14 +178,10 @@
             <div class="flex bg-gray-100 p-1 rounded-lg space-x-1" id="toolbar">
                 <button onclick="undo()" id="btn-undo" class="px-2 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed" title="撤销 (Ctrl+Z)" disabled>↩️</button>
                 <button onclick="redo()" id="btn-redo" class="px-2 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed" title="重做 (Ctrl+Y)" disabled>↪️</button>
-                
                 <div class="h-6 w-px bg-gray-300 mx-1"></div>
-
                 <button onclick="setMode('pointer')" id="btn-pointer" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-white shadow-sm text-blue-600">🖱️ 选择</button>
                 <button onclick="setMode('pan')" id="btn-pan" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🖐️ 漫游</button>
-                
                 <div class="h-6 w-px bg-gray-300 mx-1"></div>
-                
                 <button onclick="setMode('point')" id="btn-point" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🔴 加点</button>
                 <button onclick="setMode('line')" id="btn-line" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">📏 连线</button>
                 <button onclick="setMode('circle')" id="btn-circle" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">⭕ 画圆</button>
@@ -208,26 +189,21 @@
                 <button onclick="setMode('markAngle')" id="btn-markAngle" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">📐 智能标角</button>
                 <button onclick="setMode('text')" id="btn-text" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🔤 添加公式</button>
                 <button onclick="setMode('eraser')" id="btn-eraser" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-red-500 hover:bg-red-50">🧽 擦除</button>
-                
                 <div class="h-6 w-px bg-gray-300 mx-1"></div>
                 <input type="color" id="color-picker" value="#2563eb" class="h-8 w-8 rounded-md cursor-pointer border-0 p-0" title="选择颜色">
                 <button onclick="setMode('color')" id="btn-color" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🎨 改色</button>
             </div>
 
-            <!-- 视图控制 -->
             <div class="flex items-center space-x-1 ml-2 pl-2 border-l border-gray-300">
                 <button onclick="zoomInBoard()" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm" title="放大">➕</button>
                 <button onclick="zoomOutBoard()" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm" title="缩小">➖</button>
                 <button onclick="fitBoardToScreen()" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm" title="适应屏幕">🔲 自适应</button>
-                
                 <div class="h-4 w-px bg-gray-300 mx-1"></div>
-                
                 <button onclick="toggleAxes()" id="btn-toggle-axes" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm">👁️ 坐标</button>
                 <button onclick="togglePoints()" id="btn-toggle-points" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm">👁️ 点</button>
                 <button onclick="toggleAngles()" id="btn-toggle-angles" class="px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium transition-colors text-gray-600 hover:bg-gray-50 shadow-sm">👁️ 角</button>
             </div>
         </div>
-        
         <div class="flex items-center space-x-2">
             <button onclick="openSettingsModal()" class="px-4 py-1.5 bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 rounded-md text-sm font-medium transition-colors">⚙️ 设置</button>
             <button onclick="requestClearBoard()" class="px-4 py-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-md text-sm font-medium transition-colors">🗑️ 清空</button>
@@ -237,7 +213,6 @@
     <!-- JSXGraph 画板容器 -->
     <div id="jxgbox" class="flex-grow w-full h-full cursor-pointer-mode" style="background-color: #ffffff;" oncontextmenu="return false;"></div>
 
-    <!-- 极简灰色状态栏 -->
     <div id="status-bar" class="bg-gray-50 text-gray-400 text-xs px-4 py-1.5 border-t border-gray-200 text-center tracking-wider z-10 select-none">
         当前模式：选择。拖拽图形内部可平移，拖拽顶点变形，拖拽字母可单独调整文字位置。
     </div>
@@ -253,8 +228,6 @@
         let pendingTextCoords = null;
         
         let snapPreviewPoint = null; 
-        
-        // 统合图形绘制预览系统
         let shapePreviewPoint = null; 
         let shapePreviewObj = null;   
         let shapePreviewRadius = null;
@@ -265,10 +238,10 @@
         let labelDragStartUsr = null;
         let hasDraggedGraphic = false; 
 
-        // 全局吸附线段跟踪器
         let activeSnapSegment = null;
 
-        const angleColors = ['#fca5a5', '#bef264', '#86efac', '#93c5fd', '#c4b5fd', '#f9a8d4', '#fde047'];
+        // 终极高对比度跳跃色彩池
+        const angleColors = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#06b6d4', '#f97316', '#ec4899'];
         let angleColorIdx = 1;       
         let pointCharCode = 68; 
         let genericModalCallback = null;
@@ -276,16 +249,66 @@
         let unifiedAngleContext = null;
         let unifiedRegionContext = null;
 
-        let globalBoardSettings = {
-            tickDistance: 1, 
-            bbox: [-10, 8, 10, -8] 
-        };
-
-        // ================= 【核心引擎：撤销与重做架构设计】 =================
+        let globalBoardSettings = { tickDistance: 1, bbox: [-10, 8, 10, -8] };
         let historyStack = [];
         let historyIndex = -1;
         let isRestoring = false; 
         let saveTimeout = null;
+
+        // ================= 【核心绝杀 1：原生血缘锚定，提取真实射线】 =================
+        // 彻底解决JSXGraph篡改辅助点导致的反射线Bug
+        function getAnglePoints(ang) {
+            let v = ang.vertexPoint || ang.point2;
+            let p1 = ang.originalP1;
+            let p2 = ang.originalP2;
+            if (!p1 && ang.parents) p1 = board.objects[ang.parents[0]];
+            if (!p2 && ang.parents) p2 = board.objects[ang.parents[2]];
+            if (!p1) p1 = ang.point1;
+            if (!p2) p2 = ang.point3;
+            return { v, p1, p2 };
+        }
+
+        // ================= 【核心绝杀 2：纯数学绝对平分线追踪器】 =================
+        // 强行按逆时针顺序计算出两边之间真实的夹角平分线向量，绝对不会倒置！
+        function getAngleBisector(v, p1, p2) {
+            if (!v || !p1 || !p2) return { a1: 0, a2: 0, diff: 0, bisect: 0 };
+            let a1 = Math.atan2(p1.Y() - v.Y(), p1.X() - v.X());
+            let a2 = Math.atan2(p2.Y() - v.Y(), p2.X() - v.X());
+            if (a1 < 0) a1 += 2 * Math.PI;
+            if (a2 < 0) a2 += 2 * Math.PI;
+            let diff = a2 - a1;
+            while (diff < 0) diff += 2 * Math.PI;
+            let bisect = a1 + diff / 2;
+            return { a1, a2, diff, bisect };
+        }
+
+        // ================= 【超级挂载：纯数学级重心坐标引擎计算器】 =================
+        // 彻底脱离 JSXGraph 的定死偏移逻辑，保证文字死死嵌在黄金 0.65R 处
+        function bindAngleText(targetAngle) {
+            if (targetAngle.customTextObj) board.removeObject(targetAngle.customTextObj);
+            let angText = board.create('text', [
+                function() {
+                    let pts = getAnglePoints(targetAngle);
+                    if (!pts.v || !pts.p1 || !pts.p2) return 0;
+                    let { bisect } = getAngleBisector(pts.v, pts.p1, pts.p2);
+                    let R = targetAngle.currentDynamicRadius || 0.5;
+                    return pts.v.X() + (R * 0.65) * Math.cos(bisect);
+                },
+                function() {
+                    let pts = getAnglePoints(targetAngle);
+                    if (!pts.v || !pts.p1 || !pts.p2) return 0;
+                    let { bisect } = getAngleBisector(pts.v, pts.p1, pts.p2);
+                    let R = targetAngle.currentDynamicRadius || 0.5;
+                    return pts.v.Y() + (R * 0.65) * Math.sin(bisect);
+                },
+                function() { return targetAngle.displayName || ''; }
+            ], {
+                anchorX: 'middle', anchorY: 'middle', useMathJax: true,
+                visible: function() { return targetAngle.showLabel && targetAngle.visProp.visible; },
+                highlight: false, fixed: true, cssClass: 'angle-label static-text', layer: 9
+            });
+            targetAngle.customTextObj = angText;
+        }
 
         function triggerSave() {
             if (isRestoring) return;
@@ -293,10 +316,8 @@
             saveTimeout = setTimeout(() => { executeSaveHistory(); }, 50); 
         }
 
-        // 精准对象序列化，将 point 和 glider 融合保存
         function dumpBoardState() {
             let state = { points: [], lines: [], circles: [], polygons: [], angles: [], texts: [] };
-            
             for (let id in board.objects) {
                 let el = board.objects[id];
                 if (!el.elType || !el.visProp) continue;
@@ -313,7 +334,7 @@
                 }
                 if (isBorder) continue;
 
-                if (['point', 'glider'].includes(el.elType)) {
+                if (['point', 'glider', 'intersection'].includes(el.elType)) {
                     let slideObjId = null;
                     if (el.visProp && el.visProp.slideobject) slideObjId = el.visProp.slideobject.id || el.visProp.slideobject;
                     if (!slideObjId && el.slideObject) slideObjId = el.slideObject.id;
@@ -344,22 +365,23 @@
                         borderIds: el.borders.map(b => b.id), fillOpacity: el.visProp.fillopacity
                     });
                 } else if (el.elType === 'angle') {
-                    if(el.point1 && el.point2 && el.point3) {
+                    // 精确导出原生父母坐标体系
+                    let pts = getAnglePoints(el);
+                    if(pts.p1 && pts.v && pts.p2) {
                         state.angles.push({ 
-                            oldId: el.id, p1: el.point1.id, p2: el.point2.id, p3: el.point3.id, 
-                            vertexPoint: el.vertexPoint ? el.vertexPoint.id : el.point2.id, 
+                            oldId: el.id, p1: pts.p1.id, p2: pts.v.id, p3: pts.p2.id, 
+                            vertexPoint: pts.v.id, 
                             customLabel: el.customLabel || '', color: el.visProp.fillcolor, visible: el.visProp.visible,
-                            name: el.name || '', withLabel: el.visProp.withlabel || false
+                            displayName: el.displayName || '', showLabel: el.showLabel || false
                         });
                     }
                 } else if (el.elType === 'text') {
                     if (el.isLabel) continue; 
                     let isLabelForSomeone = false;
                     for (let pid in board.objects) {
-                        if (board.objects[pid].label === el) { isLabelForSomeone = true; break; }
+                        if (board.objects[pid].label === el || board.objects[pid].customTextObj === el) { isLabelForSomeone = true; break; }
                     }
                     if (isLabelForSomeone) continue;
-
                     state.texts.push({ oldId: el.id, coords: [el.X(), el.Y()], text: el.plaintext || el.text, cssClass: el.visProp.cssclass || '', fixed: el.visProp.fixed });
                 }
             }
@@ -392,6 +414,67 @@
                 if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
             }
         });
+
+        // 核心动态重算方法：实时计算图论级别的覆盖套娃深度，保证弧线自动伸展散开
+        function updateAllAnglesRadii() {
+            let vertexGroups = new Map();
+            for (let id in board.objects) {
+                let el = board.objects[id];
+                if (el.elType === 'angle' && el.visProp.visible) {
+                    let vp = el.vertexPoint || el.point2; 
+                    if (vp) {
+                        if (!vertexGroups.has(vp.id)) vertexGroups.set(vp.id, []);
+                        vertexGroups.get(vp.id).push(el);
+                    }
+                }
+            }
+
+            for (let [vpId, angles] of vertexGroups.entries()) {
+                let vp = board.objects[vpId];
+                let angData = angles.map(ang => {
+                    let pts = getAnglePoints(ang);
+                    if(!pts.p1 || !pts.p2) return null;
+                    let { a1, a2, diff, bisect } = getAngleBisector(vp, pts.p1, pts.p2);
+                    return { obj: ang, a1, a2, diff, bisect, radius: 0.5 };
+                }).filter(x => x);
+                
+                angData.sort((a, b) => a.diff - b.diff);
+                
+                for (let i = 0; i < angData.length; i++) {
+                    let current = angData[i];
+                    for (let j = 0; j < i; j++) {
+                        let smaller = angData[j];
+                        
+                        let b = smaller.bisect;
+                        let normB = b - current.a1;
+                        while(normB < 0) normB += 2*Math.PI;
+                        while(normB >= 2*Math.PI) normB -= 2*Math.PI;
+                        let overlap1 = normB <= current.diff + 1e-5;
+                        
+                        let b2 = current.bisect;
+                        let normB2 = b2 - smaller.a1;
+                        while(normB2 < 0) normB2 += 2*Math.PI;
+                        while(normB2 >= 2*Math.PI) normB2 -= 2*Math.PI;
+                        let overlap2 = normB2 <= smaller.diff + 1e-5;
+                        
+                        if (overlap1 || overlap2) {
+                            current.radius = Math.max(current.radius, smaller.radius + 0.4); 
+                        }
+                    }
+                }
+                
+                angData.forEach(item => {
+                    item.obj.currentDynamicRadius = item.radius;
+                    if (Math.abs(item.obj.visProp.radius - item.radius) > 0.01) {
+                        item.obj.setAttribute({radius: item.radius});
+                    }
+                    if (item.obj.customTextObj) {
+                        item.obj.customTextObj.needsUpdate = true;
+                        item.obj.customTextObj.update();
+                    }
+                });
+            }
+        }
 
         function restoreState(state) {
             isRestoring = true;
@@ -450,15 +533,22 @@
             });
             
             state.data.angles.forEach(a => {
-                let p1 = idMap[a.p1], p2 = idMap[a.p2], p3 = idMap[a.p3];
-                let vp = idMap[a.vertexPoint] || p2; 
-                if (p1 && p2 && p3) {
-                    let ang = board.create('angle', [p1, p2, p3], { 
-                        name: a.name || '', withLabel: a.withLabel || false, 
-                        radius: 0.5, fillColor: a.color, strokeColor: a.color, visible: a.visible, highlight: false,
-                        label: { useMathJax: true }
+                let p1 = idMap[a.p1], vp = idMap[a.p2], p2 = idMap[a.p3];
+                if (p1 && vp && p2) {
+                    let ang = board.create('angle', [p1, vp, p2], { 
+                        name: '', withLabel: false, 
+                        radius: 0.5, fillColor: a.color, strokeColor: a.color, visible: a.visible, highlight: false
                     });
-                    ang.customLabel = a.customLabel; ang.vertexPoint = vp;
+                    ang.customLabel = a.customLabel; 
+                    ang.vertexPoint = vp;
+                    // 强行锁入基因系
+                    ang.originalP1 = p1;
+                    ang.originalP2 = p2;
+                    ang.displayName = a.displayName || '';
+                    ang.showLabel = a.showLabel || false;
+                    ang.currentDynamicRadius = 0.5;
+                    
+                    bindAngleText(ang);
                     idMap[a.oldId] = ang;
                 }
             });
@@ -514,6 +604,7 @@
                 if (board.defaultAxes.y) board.defaultAxes.y.setAttribute({visible: visible});
             }
             if (board.grids) {
+                for (let i = 0; i < board.grids.length; i++) board.grids[i].setAttribute({visible: '#ffffff', fillOpacity: 0});
                 for (let i = 0; i < board.grids.length; i++) board.grids[i].setAttribute({visible: visible});
             }
         }
@@ -534,7 +625,7 @@
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, hasPoints = false;
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (['point', 'glider'].includes(el.elType) && el.visProp.visible) {
+                if (['point', 'glider', 'intersection'].includes(el.elType) && el.visProp.visible) {
                     if (el === snapPreviewPoint || el === shapePreviewPoint) continue;
                     minX = Math.min(minX, el.X()); maxX = Math.max(maxX, el.X()); minY = Math.min(minY, el.Y()); maxY = Math.max(maxY, el.Y()); hasPoints = true;
                 }
@@ -576,12 +667,20 @@
         }
 
         function getPtName(pt) {
-            if (pt.name && typeof pt.name === 'string' && pt.name.trim() !== '' && pt.name !== '吸附') return pt.name;
-            if (pt.plaintext && pt.plaintext.trim() !== '') return pt.plaintext;
-            return '?';
+            if (!pt) return '?';
+            let n = pt.name;
+            if (typeof n === 'function') n = n();
+            if (n && typeof n === 'string' && n.trim() !== '' && n !== '吸附') return n.trim();
+            if (pt.plaintext && pt.plaintext.trim() !== '') return pt.plaintext.trim();
+            return pt.id || '?';
         }
 
-        // ================= 【核心绝杀：贯穿点、交叉线全系覆盖的子角提取算法 (自动去重)】 =================
+        function anglesEqual(ang1, ang2) {
+            let diff = Math.abs(ang1 - ang2) % (2 * Math.PI);
+            return diff < 0.001 || Math.abs(diff - 2 * Math.PI) < 0.001;
+        }
+
+        // 【图论去重算法重组：彻底解决重复标角BUG】
         function getAllAnglesFromVertex(v, clickCoords) {
             let segments = [];
             for (let id in board.objects) {
@@ -598,10 +697,7 @@
                                 let dist = cross / len;
                                 if (dist < 0.1) { 
                                     let t = ((v.X() - p1.X()) * (p2.X() - p1.X()) + (v.Y() - p1.Y()) * (p2.Y() - p1.Y())) / (len * len);
-                                    if (t > 0.01 && t < 0.99) { 
-                                        segments.push(p1);
-                                        segments.push(p2);
-                                    }
+                                    if (t > 0.01 && t < 0.99) { segments.push(p1); segments.push(p2); }
                                 }
                             }
                         }
@@ -620,9 +716,20 @@
             segments = [...new Set(segments)]; 
             if (segments.length < 2) return null;
 
-            let sorted = segments.map(p => { return { p: p, a: Math.atan2(p.Y() - v.Y(), p.X() - v.X()) }; }).sort((a,b) => a.a - b.a);
+            let uniqueRays = [];
+            for (let i = 0; i < segments.length; i++) {
+                let p = segments[i];
+                let a = Math.atan2(p.Y() - v.Y(), p.X() - v.X());
+                if (a < 0) a += 2*Math.PI;
+                if (!uniqueRays.some(r => anglesEqual(r.a, a))) { uniqueRays.push({ p: p, a: a }); }
+            }
+            
+            if (uniqueRays.length < 2) return null;
+            let sorted = uniqueRays.sort((A, B) => A.a - B.a);
 
             let mouseAng = Math.atan2(clickCoords[1] - v.Y(), clickCoords[0] - v.X());
+            if (mouseAng < 0) mouseAng += 2*Math.PI;
+
             let defaultP1 = sorted[0].p, defaultP2 = sorted[1].p;
             for (let i = 0; i < sorted.length; i++) {
                 let a1 = sorted[i].a, a2 = sorted[(i+1)%sorted.length].a;
@@ -634,42 +741,45 @@
 
             let allPairs = [];
             let n = sorted.length;
-            
             if (n === 2) {
                 let a1 = Math.atan2(defaultP1.Y() - v.Y(), defaultP1.X() - v.X());
                 let a2 = Math.atan2(defaultP2.Y() - v.Y(), defaultP2.X() - v.X());
-                let diff = a2 - a1;
-                while(diff < 0) diff += 2*Math.PI;
+                if (a1 < 0) a1 += 2*Math.PI; if (a2 < 0) a2 += 2*Math.PI;
+                let diff = a2 - a1; while(diff <= 0) diff += 2*Math.PI;
                 if (diff > Math.PI) { let temp = defaultP1; defaultP1 = defaultP2; defaultP2 = temp; }
                 allPairs.push({ p1: defaultP1, p2: defaultP2, label: `∠${getPtName(defaultP1)}${getPtName(v)}${getPtName(defaultP2)}`, isDefault: true });
             } else {
                 for(let i=0; i<n; i++) {
-                    for(let j=0; j<n; j++) {
-                        if (i === j) continue;
+                    for(let j=i+1; j<n; j++) {
+                        let pA = sorted[i].p, pC = sorted[j].p;
                         let a1 = sorted[i].a, a2 = sorted[j].a;
-                        let diff = a2 - a1;
-                        while(diff <= 0) diff += 2*Math.PI; 
-                        
-                        if (diff <= Math.PI + 0.0001) { 
-                            let pA = sorted[i].p, pC = sorted[j].p;
-                            // 完美防止倒序平角重复入库 (如 ∠BDC 与 ∠CDB)
-                            let isDuplicate = allPairs.some(pair => (pair.p1 === pC && pair.p2 === pA));
-                            if (!isDuplicate) {
-                                let isDefault = (pA === defaultP1 && pC === defaultP2) || (pA === defaultP2 && pC === defaultP1);
-                                allPairs.push({ p1: pA, p2: pC, label: `∠${getPtName(pA)}${getPtName(v)}${getPtName(pC)}`, isDefault: isDefault });
-                            }
-                        }
+                        let diff = a2 - a1; while(diff <= 0) diff += 2*Math.PI; 
+                        let p1 = pA, p2 = pC;
+                        if (diff > Math.PI) { p1 = pC; p2 = pA; }
+                        let isDefault = (p1 === defaultP1 && p2 === defaultP2) || (p1 === defaultP2 && p2 === defaultP1);
+                        allPairs.push({ p1: p1, p2: p2, label: `∠${getPtName(p1)}${getPtName(v)}${getPtName(p2)}`, isDefault: isDefault });
                     }
                 }
             }
             return allPairs;
         }
 
+        // 【最严谨的角度防重探测器，无视辅助点，直接透视原生基因父母】
         function findExistingAngle(v, p1, p2) {
+            let { a1, a2 } = getAngleBisector(v, p1, p2);
+
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (el.elType === 'angle' && el.vertexPoint === v) {
-                    if ((el.point1 === p1 && el.point3 === p2) || (el.point1 === p2 && el.point3 === p1)) return el;
+                if (el.elType === 'angle') {
+                    let pts = getAnglePoints(el);
+                    if (pts.v === v && pts.p1 && pts.p2) {
+                        let ea1 = Math.atan2(pts.p1.Y() - v.Y(), pts.p1.X() - v.X());
+                        let ea2 = Math.atan2(pts.p2.Y() - v.Y(), pts.p2.X() - v.X());
+                        if (ea1 < 0) ea1 += 2*Math.PI; if (ea2 < 0) ea2 += 2*Math.PI;
+                        let matchDirect = anglesEqual(a1, ea1) && anglesEqual(a2, ea2);
+                        let matchReverse = anglesEqual(a1, ea2) && anglesEqual(a2, ea1);
+                        if (matchDirect || matchReverse) { return el; }
+                    }
                 }
             }
             return null;
@@ -686,22 +796,17 @@
             pairs.forEach((pair, index) => {
                 let label = document.createElement('label');
                 label.className = "flex items-center justify-between text-sm text-gray-700 cursor-pointer p-1.5 hover:bg-blue-100 rounded transition-colors";
+                let leftDiv = document.createElement('div'); leftDiv.className = "flex items-center space-x-2";
                 
-                let leftDiv = document.createElement('div');
-                leftDiv.className = "flex items-center space-x-2";
-                
-                let radio = document.createElement('input');
-                radio.type = 'radio';
-                radio.name = 'unifiedAngleSelect';
-                radio.value = index;
+                let radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'unifiedAngleSelect'; radio.value = index;
                 
                 radio.onchange = () => {
                     if (pair.existingAngle) {
-                        inputEl.value = pair.existingAngle.customLabel || '';
-                        submitBtn.innerText = '修改标记';
+                        inputEl.value = pair.existingAngle.customLabel || ''; 
+                        submitBtn.innerText = isFormulaMode ? '选择并插入' : '修改标记';
                     } else {
                         inputEl.value = ''; 
-                        submitBtn.innerText = '新建标记';
+                        submitBtn.innerText = isFormulaMode ? '新建并插入' : '新建标记';
                     }
                     document.getElementById('unified-angle-error').classList.add('hidden');
                 };
@@ -709,38 +814,30 @@
                 if (pair.isDefault) {
                     radio.checked = true;
                     if (pair.existingAngle) {
-                        inputEl.value = pair.existingAngle.customLabel || '';
-                        submitBtn.innerText = '修改标记';
+                        inputEl.value = pair.existingAngle.customLabel || ''; 
+                        submitBtn.innerText = isFormulaMode ? '选择并插入' : '修改标记';
                     } else {
-                        inputEl.value = '';
-                        submitBtn.innerText = '新建标记';
+                        inputEl.value = ''; 
+                        submitBtn.innerText = isFormulaMode ? '新建并插入' : '新建标记';
                     }
                 }
                 
-                let text = document.createElement('span');
-                text.innerText = pair.label;
-                text.className = "font-medium tracking-wide";
-                
-                leftDiv.appendChild(radio);
-                leftDiv.appendChild(text);
+                let text = document.createElement('span'); text.innerText = pair.label; text.className = "font-medium tracking-wide";
+                leftDiv.appendChild(radio); leftDiv.appendChild(text);
                 
                 let statusSpan = document.createElement('span');
                 if (pair.existingAngle) {
                     statusSpan.innerText = `[已标: ${pair.existingAngle.customLabel || '弧线'}]`;
                     statusSpan.className = "text-xs text-blue-600 bg-blue-50 px-1 border border-blue-200 rounded";
                 } else {
-                    statusSpan.innerText = "[未标]";
-                    statusSpan.className = "text-xs text-gray-400";
+                    statusSpan.innerText = "[未标]"; statusSpan.className = "text-xs text-gray-400";
                 }
                 
-                label.appendChild(leftDiv);
-                label.appendChild(statusSpan);
-                listEl.appendChild(label);
+                label.appendChild(leftDiv); label.appendChild(statusSpan); listEl.appendChild(label);
             });
             
             if (!pairs.some(p => p.isDefault) && pairs.length > 0) {
-                let firstRadio = listEl.querySelector('input[type="radio"]');
-                if (firstRadio) firstRadio.click();
+                let firstRadio = listEl.querySelector('input[type="radio"]'); if (firstRadio) firstRadio.click();
             }
 
             document.getElementById('unified-angle-error').classList.add('hidden');
@@ -751,9 +848,7 @@
         function closeUnifiedAnglePanel() {
             document.getElementById('unified-angle-panel').classList.add('hidden');
             unifiedAngleContext = null;
-            if (!document.getElementById('prompt-modal').classList.contains('hidden')) {
-                document.getElementById('latex-input').focus();
-            }
+            if (!document.getElementById('prompt-modal').classList.contains('hidden')) document.getElementById('latex-input').focus();
         }
 
         function submitUnifiedAnglePanel() {
@@ -766,7 +861,8 @@
             let isFormulaMode = unifiedAngleContext.isFormulaMode;
             
             let excludeId = pair.existingAngle ? pair.existingAngle.id : null;
-            if (val && isAngleNameDuplicate(val, excludeId)) {
+            let isDefaultName = (val.toUpperCase() === getPtName(v).toUpperCase());
+            if (val && !isDefaultName && isAngleNameDuplicate(val, excludeId)) {
                 let errEl = document.getElementById('unified-angle-error');
                 errEl.innerText = '⚠️ 名称在画板上已存在！';
                 errEl.classList.remove('hidden');
@@ -774,34 +870,42 @@
             }
             
             let targetAngle = pair.existingAngle;
-            
-            // 【顶级文本显示与避让机制】如果输入字不等于顶点字，才在图上显示出来
             let showLabel = false;
             let displayName = '';
-            if (val) {
-                if (val.toUpperCase() !== (v.name || '').toUpperCase()) {
-                    showLabel = true;
-                    displayName = '\\(' + val + '\\)'; 
-                }
+            if (val && !isDefaultName) {
+                showLabel = true;
+                displayName = '\\(' + val + '\\)'; 
             }
-            
+
             if (targetAngle) {
-                targetAngle.customLabel = val || v.name || '';
-                targetAngle.setAttribute({name: displayName, withLabel: showLabel});
-                if(showLabel && targetAngle.label) { targetAngle.label.setAttribute({useMathJax: true}); }
+                targetAngle.customLabel = val || getPtName(v) || '';
+                targetAngle.displayName = displayName;
+                targetAngle.showLabel = showLabel;
+                targetAngle.originalP1 = pair.p1;
+                targetAngle.originalP2 = pair.p2;
+                if (targetAngle.customTextObj) {
+                    targetAngle.customTextObj.needsUpdate = true;
+                    targetAngle.customTextObj.update();
+                }
             } else {
                 let color = angleColors[angleColorIdx % angleColors.length]; angleColorIdx++;
                 targetAngle = board.create('angle', [pair.p1, v, pair.p2], {
-                    name: displayName, withLabel: showLabel, radius: 0.5, fillColor: color, strokeColor: color, 
-                    visible: isAnglesVisible, highlight: false,
-                    label: { useMathJax: true }
+                    name: '', withLabel: false, 
+                    radius: 0.5, fillColor: color, strokeColor: color, 
+                    visible: isAnglesVisible, highlight: false
                 });
-                targetAngle.customLabel = val || v.name || ''; 
+                targetAngle.customLabel = val || getPtName(v) || ''; 
                 targetAngle.vertexPoint = v;
+                targetAngle.originalP1 = pair.p1;
+                targetAngle.originalP2 = pair.p2;
+                targetAngle.displayName = displayName;
+                targetAngle.showLabel = showLabel;
+                targetAngle.currentDynamicRadius = 0.5;
+                bindAngleText(targetAngle);
             }
             
-            board.update();
-            triggerSave();
+            updateAllAnglesRadii();
+            board.update(); triggerSave();
             
             if (isFormulaMode) {
                 let inputEl = document.getElementById('latex-input');
@@ -811,7 +915,6 @@
             closeUnifiedAnglePanel();
         }
         
-        // ================= 【核心绝杀：图论级子三角形着色引擎】 =================
         function edgeExists(A, B) {
             for (let id in board.objects) {
                 let el = board.objects[id];
@@ -842,11 +945,16 @@
         }
 
         function isPointInTriangle(pt, A, B, C) {
-            function sign(p1, p2, p3) { return (p1[0] - p3.X()) * (p2.Y() - p3.Y()) - (p2.X() - p3.X()) * (p1[1] - p3.Y()); }
-            let d1 = sign(pt, A, B), d2 = sign(pt, B, C), d3 = sign(pt, C, A);
-            let has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
-            let has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
-            return !(has_neg && has_pos);
+            let x = pt[0], y = pt[1];
+            let x1 = A.X(), y1 = A.Y();
+            let x2 = B.X(), y2 = B.Y();
+            let x3 = C.X(), y3 = C.Y();
+            let denominator = ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3));
+            if (Math.abs(denominator) < 0.001) return false;
+            let a = ((y2 - y3)*(x - x3) + (x3 - x2)*(y - y3)) / denominator;
+            let b = ((y3 - y1)*(x - x3) + (x1 - x3)*(y - y3)) / denominator;
+            let c = 1 - a - b;
+            return a >= 0 && a <= 1 && b >= 0 && b <= 1 && c >= 0 && c <= 1;
         }
 
         function findExistingPolygon(pts) {
@@ -864,7 +972,7 @@
             let points = [];
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible) {
+                if (['point', 'glider', 'intersection'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible) {
                     points.push(el);
                 }
             }
@@ -874,6 +982,10 @@
                 for(let j=i+1; j<n; j++) {
                     for(let k=j+1; k<n; k++) {
                         let A = points[i], B = points[j], C = points[k];
+                        let minX = Math.min(A.X(), B.X(), C.X()), maxX = Math.max(A.X(), B.X(), C.X());
+                        let minY = Math.min(A.Y(), B.Y(), C.Y()), maxY = Math.max(A.Y(), B.Y(), C.Y());
+                        if (clickCoords[0] < minX || clickCoords[0] > maxX || clickCoords[1] < minY || clickCoords[1] > maxY) continue;
+                        
                         if (edgeExists(A, B) && edgeExists(B, C) && edgeExists(C, A)) {
                             if (isPointInTriangle(clickCoords, A, B, C)) {
                                 let area = Math.abs(A.X()*(B.Y()-C.Y()) + B.X()*(C.Y()-A.Y()) + C.X()*(A.Y()-B.Y())) / 2;
@@ -945,9 +1057,12 @@
             }
             board.update(); triggerSave(); closeUnifiedRegionPanel();
         }
-        // ====================================================================
 
         function bindBoardEvents() {
+            board.on('update', function() {
+                updateAllAnglesRadii();
+            });
+
             board.on('move', function(e) {
                 let coords = board.getUsrCoordsOfMouse(e);
                 let mouseX = coords[0], mouseY = coords[1]; 
@@ -961,19 +1076,15 @@
 
                 if (currentMode === 'pointer') { if (board.mouse && board.mouse.obj) { hasDraggedGraphic = true; } }
 
-                // 【全局增强磁力锁定及连线预览追踪】
                 if ((currentMode === 'circle' || currentMode === 'line') && clickPoints.length === 1) {
                     let pX = mouseX, pY = mouseY;
-                    let minDist = 30 / board.unitX; // 宽广的防手抖磁吸半径
+                    let minDist = 30 / board.unitX; 
                     for (let id in board.objects) {
                         let el = board.objects[id];
-                        // 核心：Point 和 Glider 全频段扫描
                         if (['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible && el !== clickPoints[0]) {
                             let d = Math.hypot(el.X() - mouseX, el.Y() - mouseY);
                             if (d < minDist) {
-                                minDist = d;
-                                pX = el.X();
-                                pY = el.Y();
+                                minDist = d; pX = el.X(); pY = el.Y();
                             }
                         }
                     }
@@ -1075,7 +1186,7 @@
                     }
                     
                     if (textEl) {
-                        let parent = Object.values(board.objects).find(obj => obj.label === textEl);
+                        let parent = Object.values(board.objects).find(obj => obj.label === textEl || obj.customTextObj === textEl);
                         if (!parent && textEl.parent) parent = textEl.parent; 
                         if (parent) {
                             activeLabel = textEl; activeLabelParent = parent;
@@ -1093,7 +1204,6 @@
                 let actualClickCoords = [coords[0], coords[1]];
                 let els = board.getAllObjectsUnderMouse(e);
                 
-                // 【核心：全系吸附点捕获，彻底消灭幽灵点 F】
                 let isPointUnderMouse = false, clickedPoint = null;
                 for (let i = 0; i < els.length; i++) {
                     if (['point', 'glider'].includes(els[i].elType) && els[i] !== snapPreviewPoint && els[i] !== shapePreviewPoint && els[i].visProp.visible) {
@@ -1117,34 +1227,26 @@
 
                 let promptModal = document.getElementById('prompt-modal');
                 if (!promptModal.classList.contains('hidden')) {
-                    let targetAngle = null; 
-                    for (let id in board.objects) {
-                        let obj = board.objects[id];
-                        if (obj.elType === 'angle' && obj.visProp.visible && obj.vertexPoint) {
-                            let dist = Math.hypot(actualClickCoords[0] - obj.vertexPoint.X(), actualClickCoords[1] - obj.vertexPoint.Y());
-                            if (dist < 1.5) { targetAngle = obj; break; }
-                        }
-                    }
-                    if (targetAngle) {
-                        document.getElementById('latex-input').value += '\\angle ' + (targetAngle.customLabel || targetAngle.vertexPoint.name || '');
-                        document.getElementById('latex-input').focus();
-                        return;
-                    } 
-                    
+                    // 【终极解绑劫持：彻底删除盲抓旧角代码，全系采用精准射线寻角面板】
                     let potentialVertex = clickedPoint;
                     if (!potentialVertex) {
+                        let bestDist = Infinity;
                         for(let id in board.objects) {
                             let el = board.objects[id];
-                            if (['point', 'glider'].includes(el.elType)) {
-                                if (Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]) < 2.0) { potentialVertex = el; break; }
+                            if (['point', 'glider'].includes(el.elType) && el.visProp.visible && el !== snapPreviewPoint && el !== shapePreviewPoint) {
+                                let d = Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]);
+                                if (d < bestDist && d < 8.0) { // 宽阔的顶点捕捉半径
+                                    bestDist = d; potentialVertex = el; 
+                                }
                             }
                         }
                     }
+                    
                     if (potentialVertex) {
                         let pairs = getAllAnglesFromVertex(potentialVertex, actualClickCoords);
                         if (pairs && pairs.length > 0) {
                             pairs.forEach(p => p.existingAngle = findExistingAngle(potentialVertex, p.p1, p.p2));
-                            openUnifiedAnglePanel(potentialVertex, pairs, true);
+                            openUnifiedAnglePanel(potentialVertex, pairs, true); // true表示公式模式，会显示“选择并插入”
                             return; 
                         }
                     }
@@ -1164,10 +1266,14 @@
                 if (currentMode === 'markAngle') {
                     let v = clickedPoint;
                     if (!v) {
+                        let bestDist = Infinity;
                         for(let id in board.objects) {
                             let el = board.objects[id];
-                            if (['point', 'glider'].includes(el.elType)) {
-                                if (Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]) < 2.0) { v = el; break; }
+                            if (['point', 'glider'].includes(el.elType) && el.visProp.visible && el !== snapPreviewPoint && el !== shapePreviewPoint) {
+                                let d = Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]);
+                                if (d < bestDist && d < 8.0) { 
+                                    bestDist = d; v = el; 
+                                }
                             }
                         }
                     }
@@ -1175,22 +1281,7 @@
                     if (v) {
                         let pairs = getAllAnglesFromVertex(v, actualClickCoords);
                         if (pairs && pairs.length > 0) {
-                            let clickedExistingAngle = null;
-                            for (let id in board.objects) {
-                                let obj = board.objects[id];
-                                if (obj.elType === 'angle' && obj.visProp.visible && obj.vertexPoint === v) {
-                                    let dist = Math.hypot(actualClickCoords[0] - v.X(), actualClickCoords[1] - v.Y());
-                                    if (dist < 1.5) { clickedExistingAngle = obj; break; }
-                                }
-                            }
-
-                            pairs.forEach(p => {
-                                p.existingAngle = findExistingAngle(v, p.p1, p.p2);
-                                if (clickedExistingAngle && p.existingAngle === clickedExistingAngle) {
-                                    pairs.forEach(pp => pp.isDefault = false); 
-                                    p.isDefault = true;
-                                }
-                            });
+                            pairs.forEach(p => p.existingAngle = findExistingAngle(v, p.p1, p.p2));
                             openUnifiedAnglePanel(v, pairs, false); 
                         }
                     }
@@ -1201,7 +1292,6 @@
                     if (els.length > 0) {
                         let selectedColor = document.getElementById('color-picker').value;
                         
-                        // 优先尝试找 线段、圆、角 进行局部上色
                         let target = els.find(el => ['segment', 'line'].includes(el.elType)) || 
                                      els.find(el => el.elType === 'circle') || 
                                      els.find(el => el.elType === 'angle');
@@ -1214,14 +1304,12 @@
                             return;
                         }
                         
-                        // 【终极重构：如果点在空白的图形区间，启动子区域探测引擎】
                         let candidates = findPolygonRegions(actualClickCoords);
                         if (candidates.length > 0) {
                             openUnifiedRegionPanel(candidates, selectedColor);
                             return;
                         }
                         
-                        // 兜底方案
                         target = els.find(el => !['point', 'glider'].includes(el.elType)) || els[0];
                         if (target) {
                             target.setAttribute({strokeColor: selectedColor});
@@ -1264,16 +1352,15 @@
                     return;
                 }
                 else if (currentMode === 'point') {
+                    let isPointUnderMouse = els.some(el => ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible);
                     if (!isPointUnderMouse) {
                         let finalCoords = (snapPreviewPoint && snapPreviewPoint.X() !== 9999) ? [snapPreviewPoint.X(), snapPreviewPoint.Y()] : actualClickCoords;
-                        
                         let currentSlideObj = activeSnapSegment; 
                         
                         openGenericModal("命名控制点", "请输入点的字母", String.fromCharCode(pointCharCode), function(val) {
                             let nameToUse = val.trim().toUpperCase(); updatePointCharCode(nameToUse);
                             let props = { size: 4, name: nameToUse, fillColor: '#ef4444', strokeColor: 'white', visible: isPointsVisible, withLabel: nameToUse !== '', label: { offset: [15, 15] } };
                             
-                            // 【终极寄生】：只要是在线段上点的，统统创建为 Glider（游标）
                             if (currentSlideObj) { 
                                 board.create('glider', [finalCoords[0], finalCoords[1], currentSlideObj], props);
                             } else {
@@ -1300,7 +1387,13 @@
                 }
                 else {
                     let p;
-                    // 【全频段双重捕获】，保证连线 100% 连接已有对象！
+                    let isPointUnderMouse = false, clickedPoint = null;
+                    for (let i = 0; i < els.length; i++) {
+                        if (['point', 'glider'].includes(els[i].elType) && els[i] !== snapPreviewPoint && els[i] !== shapePreviewPoint && els[i].visProp.visible) {
+                            isPointUnderMouse = true; clickedPoint = els[i]; break;
+                        }
+                    }
+                    
                     if (isPointUnderMouse) {
                         p = clickedPoint; 
                         if (currentMode === 'polygon' && clickPoints.length >= 2 && p === clickPoints[0]) {
@@ -1399,6 +1492,7 @@
             closeConfirmModal();
             JXG.JSXGraph.freeBoard(board); document.getElementById('jxgbox').innerHTML = '';
             clickPoints = []; tempLines = []; shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null;
+            snapPreviewPoint = null; activeSnapSegment = null;
             angleColorIdx = 1; pointCharCode = 68; 
             isAxesVisible = true; isPointsVisible = true; isAnglesVisible = true;
             document.getElementById('btn-toggle-axes').innerText = '👁️ 坐标';
@@ -1471,9 +1565,15 @@
             board.create('polygon', [pA, pB, pC], { fillColor: 'none', fillOpacity: 0, hasInnerPoints: true, highlight: false, borders: { strokeColor: '#b91c1c', strokeWidth: 2, fixed: true, highlight: false } });
 
             const angleA = board.create('angle', [pB, pA, pC], {
-                name: '', withLabel: false, radius: 0.5, fillColor: '#fca5a5', strokeColor: '#dc2626', highlight: false, label: { useMathJax: true }
+                name: '', withLabel: false, radius: 0.5, fillColor: '#ef4444', strokeColor: '#dc2626', highlight: false
             });
             angleA.customLabel = 'A'; angleA.vertexPoint = pA;
+            angleA.originalP1 = pB;
+            angleA.originalP2 = pC;
+            angleA.displayName = '';
+            angleA.showLabel = false;
+            angleA.currentDynamicRadius = 0.5;
+            bindAngleText(angleA);
         }
 
         function setMode(mode) {
@@ -1519,7 +1619,7 @@
                 'circle': '当前模式：画圆。点击确定圆心(默认O)，拖动鼠标出现虚线预览，再次点击确定半径。',
                 'polygon': '当前模式：多边形。依次点击各个顶点，最后回到起点点击以闭合多边形。',
                 'markAngle': '当前模式：标角。点击角内部，自动出全能面板（包含修改与多角选择）。',
-                'text': '当前模式：公式。点击【角/线段/点】会自动飞入公式；点击【未标的角】可自动创建扇形并录入！',
+                'text': '当前模式：公式。点击线段/顶点自动录入名称；点击【角区域】自动弹出选角面板供你精准拾取！',
                 'color': '当前模式：改色。选定颜色后，点击任意“线条”上色，或点击“子三角形”的空白面进行填充！',
                 'eraser': '当前模式：擦除。点击画板上的任意元素将其删除。重叠时将弹窗询问。'
             };
