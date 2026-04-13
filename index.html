@@ -61,6 +61,9 @@
 </head>
 <body class="bg-gray-50 h-screen flex flex-col overflow-hidden font-sans">
 
+    <!-- 隐藏的文件上传控件 -->
+    <input type="file" id="bg-upload" accept="image/*" class="hidden">
+
     <!-- 画板设置弹窗 -->
     <div id="settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center transition-opacity">
         <div class="bg-white rounded-lg p-6 w-80 shadow-2xl transform transition-transform scale-100">
@@ -178,18 +181,26 @@
             <div class="flex bg-gray-100 p-1 rounded-lg space-x-1" id="toolbar">
                 <button onclick="undo()" id="btn-undo" class="px-2 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed" title="撤销 (Ctrl+Z)" disabled>↩️</button>
                 <button onclick="redo()" id="btn-redo" class="px-2 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed" title="重做 (Ctrl+Y)" disabled>↪️</button>
+                
                 <div class="h-6 w-px bg-gray-300 mx-1"></div>
                 <button onclick="setMode('pointer')" id="btn-pointer" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-white shadow-sm text-blue-600">🖱️ 选择</button>
                 <button onclick="setMode('pan')" id="btn-pan" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🖐️ 漫游</button>
+                
                 <div class="h-6 w-px bg-gray-300 mx-1"></div>
                 <button onclick="setMode('point')" id="btn-point" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🔴 加点</button>
                 <button onclick="setMode('line')" id="btn-line" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">📏 连线</button>
                 <button onclick="setMode('circle')" id="btn-circle" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">⭕ 定圆心</button>
                 <button onclick="setMode('circle3p')" id="btn-circle3p" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">⭕ 三点圆</button>
+                <button onclick="setMode('sector')" id="btn-sector" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🪭 扇形/弧</button>
                 <button onclick="setMode('polygon')" id="btn-polygon" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">⬠ 画多边形</button>
                 <button onclick="setMode('markAngle')" id="btn-markAngle" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">📐 智能标角</button>
                 <button onclick="setMode('text')" id="btn-text" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🔤 添加公式</button>
                 <button onclick="setMode('eraser')" id="btn-eraser" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-red-500 hover:bg-red-50">🧽 擦除</button>
+                
+                <div class="h-6 w-px bg-gray-300 mx-1"></div>
+                <button onclick="document.getElementById('bg-upload').click()" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200" title="支持直接 Ctrl+V 粘贴截图">🖼️ 传图</button>
+                <button onclick="clearBackgrounds()" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-red-500 hover:bg-red-50" title="清空所有背景图">🗑️ 删图</button>
+                
                 <div class="h-6 w-px bg-gray-300 mx-1"></div>
                 <input type="color" id="color-picker" value="#2563eb" class="h-8 w-8 rounded-md cursor-pointer border-0 p-0" title="选择颜色">
                 <button onclick="setMode('color')" id="btn-color" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200">🎨 改色</button>
@@ -215,7 +226,7 @@
     <div id="jxgbox" class="flex-grow w-full h-full cursor-pointer-mode" style="background-color: #ffffff;" oncontextmenu="return false;"></div>
 
     <div id="status-bar" class="bg-gray-50 text-gray-400 text-xs px-4 py-1.5 border-t border-gray-200 text-center tracking-wider z-10 select-none">
-        当前模式：选择。拖拽图形内部可平移，拖拽顶点变形，拖拽字母可单独调整文字位置。
+        当前模式：选择。拖拽图形内部可平移，拖拽顶点变形，拖拽字母可单独调整文字位置。支持随时按 ESC 取消动作。支持 Ctrl+V 粘贴截图作为背景。
     </div>
 
     <script type="text/javascript">
@@ -239,6 +250,11 @@
         let activeLabelStartOffset = null;
         let labelDragStartUsr = null;
         let hasDraggedGraphic = false; 
+
+        // 用于保存扇形面拖拽状态
+        let activeDraggedSector = null;
+        let sectorDragStartUsr = null;
+        let sectorOrigCoords = null;
 
         let activeSnapSegment = null;
 
@@ -306,18 +322,89 @@
             targetAngle.customTextObj = angText;
         }
 
-        // ================= 【撤销重做 & 状态管理】 =================
-        function triggerSave() {
-            if (isRestoring) return;
-            if (saveTimeout) clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(() => { executeSaveHistory(); }, 50); 
+        // ================= 【剪贴板与背景图引擎】 =================
+        function addBackgroundImage(base64Url, w, h) {
+            let bbox = board.getBoundingBox();
+            let boardW = bbox[2] - bbox[0];
+            let boardH = bbox[1] - bbox[3];
+            
+            let targetW = boardW * 0.8;
+            let targetH = boardH * 0.8;
+            let scale = Math.min(targetW / w, targetH / h);
+            
+            let finalW = w * scale;
+            let finalH = h * scale;
+            
+            let cx = (bbox[0] + bbox[2]) / 2;
+            let cy = (bbox[1] + bbox[3]) / 2;
+            let x = cx - finalW / 2;
+            let y = cy - finalH / 2;
+            
+            board.create('image', [base64Url, [x, y], [finalW, finalH]], {
+                layer: 0, fixed: true, highlight: false
+            });
+            board.update();
+            triggerSave();
         }
 
+        function clearBackgrounds() {
+            let toRemove = [];
+            for (let id in board.objects) {
+                if (board.objects[id].elType === 'image') {
+                    toRemove.push(board.objects[id]);
+                }
+            }
+            if (toRemove.length > 0) {
+                toRemove.forEach(img => board.removeObject(img));
+                board.update();
+                triggerSave();
+            }
+        }
+
+        document.getElementById('bg-upload').addEventListener('change', function(e) {
+            let file = e.target.files[0];
+            if (!file) return;
+            let reader = new FileReader();
+            reader.onload = function(event) {
+                let img = new Image();
+                img.onload = function() {
+                    addBackgroundImage(event.target.result, img.width, img.height);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+            this.value = ''; 
+        });
+
+        window.addEventListener('paste', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            let items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let index in items) {
+                let item = items[index];
+                if (item.kind === 'file' && item.type.indexOf('image/') !== -1) {
+                    let blob = item.getAsFile();
+                    let reader = new FileReader();
+                    reader.onload = function(event) {
+                        let img = new Image();
+                        img.onload = function() {
+                            addBackgroundImage(event.target.result, img.width, img.height);
+                        };
+                        img.src = event.target.result;
+                    };
+                    reader.readAsDataURL(blob);
+                    e.preventDefault();
+                }
+            }
+        });
+
+
+        // ================= 【撤销重做 & 状态管理】 =================
         function dumpBoardState() {
-            let state = { points: [], lines: [], circles: [], circumcircles: [], polygons: [], angles: [], texts: [] };
+            let state = { points: [], lines: [], circles: [], circumcircles: [], sectors: [], polygons: [], angles: [], texts: [], images: [] };
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (!el.elType || !el.visProp) continue;
+                if (!el || !el.elType || !el.visProp) continue;
                 let idLower = el.id.toLowerCase();
                 if (idLower.indexOf('ticks') > -1 || idLower.indexOf('axes') > -1 || idLower.indexOf('grid') > -1 || idLower.indexOf('infobox') > -1) continue;
                 if (el === snapPreviewPoint || el === shapePreviewPoint || el === shapePreviewObj || el === shapePreviewRadius) continue;
@@ -330,7 +417,11 @@
                 }
                 if (isBorder) continue;
 
-                if (['point', 'glider', 'intersection'].includes(el.elType)) {
+                if (el.elType === 'image') {
+                    state.images.push({
+                        oldId: el.id, url: el.url, coords: [el.X(), el.Y()], size: el.size ? [el.size[0], el.size[1]] : [100, 100]
+                    });
+                } else if (['point', 'glider', 'intersection'].includes(el.elType)) {
                     let slideObjId = null;
                     if (el.visProp && el.visProp.slideobject) slideObjId = el.visProp.slideobject.id || el.visProp.slideobject;
                     if (!slideObjId && el.slideObject) slideObjId = el.slideObject.id;
@@ -348,15 +439,20 @@
                             straightFirst: el.visProp.straightfirst, straightLast: el.visProp.straightlast
                         });
                     }
-                } else if (['circle', 'circumcircle'].includes(el.elType)) {
-                    if (el.isCircle3P && el.originalParents) {
+                } else if (['circle', 'circumcircle', 'sector'].includes(el.elType) || el.isSector) {
+                    if (el.isSector && el.originalParents) {
+                        state.sectors.push({
+                            oldId: el.id, p1: el.originalParents[0].id, p2: el.originalParents[1].id, p3: el.originalParents[2].id,
+                            color: el.visProp.strokecolor, fillColor: el.visProp.fillcolor, fillOpacity: el.visProp.fillopacity
+                        });
+                    } else if (el.isCircle3P && el.originalParents) {
                         state.circumcircles.push({
                             oldId: el.id,
                             p1: el.originalParents[0].id, p2: el.originalParents[1].id, p3: el.originalParents[2].id,
                             color: el.visProp.strokecolor, fillColor: el.visProp.fillcolor, fillOpacity: el.visProp.fillopacity
                         });
                     } else if(el.center && el.point2) {
-                        state.circles.push({ oldId: el.id, center: el.center.id, p2: el.point2.id, color: el.visProp.strokecolor, fillColor: el.visProp.fillcolor, fillOpacity: el.visProp.fillopacity });
+                        state.circles.push({ oldId: el.id, center: el.center.id, p2: el.point2.id, color: el.visProp.strokecolor, fillColor: el.visProp.fillcolor, fillOpacity: el.visProp.fillopacity, isSectorPath: el.isSectorPath, visible: el.visProp.visible });
                     }
                 } else if (el.elType === 'polygon') {
                     let strokeColor = '#b91c1c';
@@ -387,6 +483,12 @@
                 }
             }
             return state;
+        }
+
+        function triggerSave() {
+            if (isRestoring) return;
+            if (saveTimeout) clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => { executeSaveHistory(); }, 50); 
         }
 
         function executeSaveHistory() {
@@ -441,14 +543,11 @@
             return didCancel;
         };
 
-        // 【终极焦点捕获】：点击画板任意区域强制夺取焦点，防止 iframe 焦点流失导致按键无效
         window.addEventListener('mousedown', function() { 
             window.focus(); 
         });
 
-        // 最高级捕获：强行在捕获阶段(true)拦截键盘
         window.addEventListener('keydown', function(e) {
-            // 当按下 ESC 时，不仅打断当前未完成的绘制，并且强制退回到"选择"模式（CAD标准体验）
             if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) {
                 window.handleCancel();
                 if (currentMode !== 'pointer') {
@@ -470,7 +569,7 @@
             let vertexGroups = new Map();
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (el.elType === 'angle' && el.visProp.visible) {
+                if (el && el.elType === 'angle' && el.visProp && el.visProp.visible) {
                     let vp = el.vertexPoint || el.point2; 
                     if (vp) {
                         if (!vertexGroups.has(vp.id)) vertexGroups.set(vp.id, []);
@@ -530,11 +629,19 @@
             document.getElementById('jxgbox').innerHTML = '';
             clickPoints = []; tempLines = []; tempNewPoints = []; shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null; snapPreviewPoint = null;
             activeLabel = null; activeLabelParent = null; activeSnapSegment = null;
+            activeDraggedSector = null;
             
             initBoardCore();
             board.setBoundingBox(state.bbox, true);
             
             let idMap = {};
+
+            if (state.data.images) {
+                state.data.images.forEach(img => {
+                    let newImg = board.create('image', [img.url, img.coords, img.size], { layer: 0, fixed: true, highlight: false });
+                    idMap[img.oldId] = newImg;
+                });
+            }
             
             state.data.points.filter(p => !p.slideObject).forEach(p => {
                 let newP = board.create('point', p.coords, { name: p.name, fillColor: p.color, strokeColor: 'white', size: p.size || 4, visible: p.visible, withLabel: p.name !== '', label: { offset: p.labelOffset } });
@@ -544,7 +651,7 @@
             state.data.polygons.forEach(p => {
                 let pts = p.vertices.map(vId => idMap[vId]).filter(x=>x);
                 if (pts.length > 0) {
-                    let poly = board.create('polygon', pts, { fillColor: p.color, fillOpacity: p.fillOpacity !== undefined ? p.fillOpacity : 0, hasInnerPoints: true, highlightFillColor: 'none', highlightFillOpacity: 0, borders: { strokeColor: p.strokeColor, strokeWidth: 2, fixed: true } });
+                    let poly = board.create('polygon', pts, { fillColor: p.color, fillOpacity: p.fillOpacity !== undefined ? p.fillOpacity : 0, hasInnerPoints: true, highlight: false, borders: { strokeColor: p.strokeColor, strokeWidth: 2, fixed: true } });
                     idMap[p.oldId] = poly;
                     if (p.borderIds) {
                         p.borderIds.forEach((oldBId, idx) => { if (poly.borders[idx]) idMap[oldBId] = poly.borders[idx]; });
@@ -563,7 +670,13 @@
             state.data.circles.forEach(c => {
                 let p1 = idMap[c.center], p2 = idMap[c.p2];
                 if (p1 && p2) {
-                    let circ = board.create('circle', [p1, p2], { strokeWidth: 2, strokeColor: c.color, fillColor: c.fillColor, fillOpacity: c.fillOpacity, highlightFillColor: 'none', highlightFillOpacity: 0 });
+                    let circ = board.create('circle', [p1, p2], { 
+                        strokeWidth: c.isSectorPath ? 0 : 2, 
+                        strokeColor: c.color, fillColor: c.fillColor, fillOpacity: c.fillOpacity, 
+                        highlight: false, hasInnerPoints: !c.isSectorPath,
+                        visible: c.visible !== undefined ? c.visible : true
+                    });
+                    if (c.isSectorPath) circ.isSectorPath = true;
                     idMap[c.oldId] = circ;
                 }
             });
@@ -572,10 +685,22 @@
                 state.data.circumcircles.forEach(c => {
                     let p1 = idMap[c.p1], p2 = idMap[c.p2], p3 = idMap[c.p3];
                     if (p1 && p2 && p3) {
-                        let circ = board.create('circumcircle', [p1, p2, p3], { strokeWidth: 2, strokeColor: c.color, fillColor: c.fillColor, fillOpacity: c.fillOpacity, highlightFillColor: 'none', highlightFillOpacity: 0 });
+                        let circ = board.create('circumcircle', [p1, p2, p3], { strokeWidth: 2, strokeColor: c.color, fillColor: c.fillColor, fillOpacity: c.fillOpacity, highlight: false, hasInnerPoints: true });
                         circ.isCircle3P = true;
                         circ.originalParents = [p1, p2, p3];
                         idMap[c.oldId] = circ;
+                    }
+                });
+            }
+
+            if (state.data.sectors) {
+                state.data.sectors.forEach(c => {
+                    let p1 = idMap[c.p1], p2 = idMap[c.p2], p3 = idMap[c.p3];
+                    if (p1 && p2 && p3) {
+                        let sec = board.create('sector', [p1, p2, p3], { strokeWidth: 2, strokeColor: c.color, fillColor: c.fillColor, fillOpacity: c.fillOpacity, highlight: false, hasInnerPoints: true });
+                        sec.isSector = true;
+                        sec.originalParents = [p1, p2, p3];
+                        idMap[c.oldId] = sec;
                     }
                 });
             }
@@ -684,7 +809,7 @@
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, hasPoints = false;
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (['point', 'glider', 'intersection'].includes(el.elType) && el.visProp.visible) {
+                if (el && ['point', 'glider', 'intersection'].includes(el.elType) && el.visProp && el.visProp.visible) {
                     if (el === snapPreviewPoint || el === shapePreviewPoint) continue;
                     minX = Math.min(minX, el.X()); maxX = Math.max(maxX, el.X()); minY = Math.min(minY, el.Y()); maxY = Math.max(maxY, el.Y()); hasPoints = true;
                 }
@@ -699,7 +824,7 @@
             if (!name) return false; 
             for (let id in board.objects) {
                 let obj = board.objects[id];
-                if (obj.elType === 'angle' && obj.id !== excludeId && obj.customLabel === name) return true;
+                if (obj && obj.elType === 'angle' && obj.id !== excludeId && obj.customLabel === name) return true;
             }
             return false;
         }
@@ -710,7 +835,7 @@
 
         function getNextAutoPointName(isCenter = false) {
             if (isCenter) {
-                let exists = Object.values(board.objects).some(el => ['point', 'glider'].includes(el.elType) && el.name === 'O');
+                let exists = Object.values(board.objects).some(el => el && ['point', 'glider'].includes(el.elType) && el.name === 'O');
                 return exists ? 'O_1' : 'O';
             }
             let name = String.fromCharCode(pointCharCode);
@@ -734,11 +859,12 @@
             return pt.id || '?';
         }
 
-        // ================= 【极角数学探测器】 =================
+        // ================= 【极角数学探测器（全系透视支持扇形）】 =================
         function getAllAnglesFromVertex(v, clickCoords) {
             let segments = [];
             for (let id in board.objects) {
                 let el = board.objects[id];
+                if (!el) continue;
                 if (['segment', 'line'].includes(el.elType)) {
                     if (el.point1 === v) segments.push(el.point2);
                     else if (el.point2 === v) segments.push(el.point1);
@@ -764,6 +890,13 @@
                         let next = el.vertices[idx+1];
                         if(prev) segments.push(prev);
                         if(next) segments.push(next);
+                    }
+                } else if (el.elType === 'sector' || el.isSector) {
+                    let pts = el.originalParents;
+                    // 只要圆心是该顶点，就提取其两条半径射线
+                    if (pts && pts.length >= 3 && pts[0] === v) {
+                        segments.push(pts[1]);
+                        segments.push(pts[2]);
                     }
                 }
             }
@@ -823,7 +956,7 @@
 
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (el.elType === 'angle') {
+                if (el && el.elType === 'angle') {
                     let pts = getAnglePoints(el);
                     if (pts.v === v && pts.p1 && pts.p2) {
                         let b2 = getAngleBisector(v, pts.p1, pts.p2);
@@ -972,6 +1105,7 @@
         function edgeExists(A, B) {
             for (let id in board.objects) {
                 let el = board.objects[id];
+                if (!el) continue;
                 if (['segment', 'line'].includes(el.elType)) {
                     if (isPointOnLine(A, el) && isPointOnLine(B, el)) return true;
                 } else if (el.elType === 'polygon') {
@@ -1014,7 +1148,7 @@
         function findExistingPolygon(pts) {
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (el.elType === 'polygon') {
+                if (el && el.elType === 'polygon') {
                     let v = el.vertices.slice(0, -1);
                     if (v.length === pts.length && pts.every(p => v.includes(p))) return el;
                 }
@@ -1026,7 +1160,7 @@
             let points = [];
             for (let id in board.objects) {
                 let el = board.objects[id];
-                if (['point', 'glider', 'intersection'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible) {
+                if (el && ['point', 'glider', 'intersection'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp && el.visProp.visible) {
                     points.push(el);
                 }
             }
@@ -1061,7 +1195,7 @@
         }
 
         function openUnifiedRegionPanel(candidates, selectedColor) {
-            unifiedRegionContext = { candidates: candidates, color: selectedColor };
+            unifiedRegionContext = { candidates: candidates, selectedColor: selectedColor };
             let listEl = document.getElementById('unified-region-list');
             listEl.innerHTML = '';
             candidates.forEach((cand, index) => {
@@ -1100,7 +1234,7 @@
             let selectedIdx = document.querySelector('input[name="unifiedRegionSelect"]:checked');
             if (!selectedIdx) return;
             let cand = unifiedRegionContext.candidates[selectedIdx.value];
-            let color = unifiedRegionContext.color;
+            let color = unifiedRegionContext.selectedColor;
             if (cand.existingPoly) {
                 cand.existingPoly.setAttribute({fillColor: color, fillOpacity: 0.2});
             } else {
@@ -1116,7 +1250,9 @@
         function performErase(obj) {
             let ptsToCheck = [];
             let is3PCircle = ['circle', 'circumcircle'].includes(obj.elType) && obj.isCircle3P;
+            let isSector = obj.isSector;
             let cachedCenter = obj.center; 
+            let circlesToRemove = [];
 
             if (obj.elType === 'polygon') {
                 let verts = obj.vertices.slice(0, -1);
@@ -1135,10 +1271,21 @@
                     board.removeObject(a);
                 });
                 ptsToCheck = [...verts];
-            } else if (['circle', 'circumcircle'].includes(obj.elType)) {
+            } else if (['circle', 'circumcircle'].includes(obj.elType) || isSector) {
                 if (obj.center) ptsToCheck.push(obj.center);
                 if (obj.point2) ptsToCheck.push(obj.point2);
                 if (obj.originalParents) ptsToCheck.push(...obj.originalParents);
+                
+                if (isSector) {
+                    for (let id in board.objects) {
+                        let c = board.objects[id];
+                        if (c && c.elType === 'circle' && c.isSectorPath) {
+                            if (c.center === obj.originalParents[0] && c.point2 === obj.originalParents[1]) {
+                                circlesToRemove.push(c);
+                            }
+                        }
+                    }
+                }
             } else if (['segment', 'line'].includes(obj.elType)) {
                 if (obj.point1) ptsToCheck.push(obj.point1);
                 if (obj.point2) ptsToCheck.push(obj.point2);
@@ -1148,7 +1295,6 @@
             
             board.removeObject(obj);
 
-            // 强制挖出三点圆隐形圆心
             if (is3PCircle && cachedCenter) {
                 board.removeObject(cachedCenter);
             }
@@ -1158,11 +1304,11 @@
                 for (let id in board.objects) {
                     let el = board.objects[id];
                     if (!el || !el.visProp || el === obj || el.id === obj.id) continue;
-                    if (['point', 'glider', 'ticks', 'text'].includes(el.elType)) continue;
+                    if (['point', 'glider', 'ticks', 'text', 'image'].includes(el.elType)) continue;
                     
                     if (['segment', 'line'].includes(el.elType)) {
                         if (el.point1 === p || el.point2 === p) inUse = true;
-                    } else if (['circle', 'circumcircle'].includes(el.elType)) {
+                    } else if (['circle', 'circumcircle'].includes(el.elType) || el.isSector) {
                         if (el.center === p || el.point2 === p) inUse = true;
                         if (el.originalParents && el.originalParents.includes(p)) inUse = true;
                     } else if (el.elType === 'polygon') {
@@ -1172,10 +1318,12 @@
                         if (pts.v === p || pts.p1 === p || pts.p2 === p) inUse = true;
                     }
                 }
-                if (!inUse && p.visProp) { // 只要无依无靠直接删，无需判断 visible
+                if (!inUse && p.visProp) { 
                     board.removeObject(p);
                 }
             });
+
+            circlesToRemove.forEach(c => board.removeObject(c));
         }
 
         function bindBoardEvents() {
@@ -1194,33 +1342,58 @@
                     hasDraggedGraphic = true; board.update(); return;
                 }
 
+                // ================= 【完美瞬间移动修复：扇形与中心锁定平移引擎】 =================
+                if (currentMode === 'pointer' && activeDraggedSector) {
+                    let dx = mouseX - sectorDragStartUsr[0]; 
+                    let dy = mouseY - sectorDragStartUsr[1]; 
+                    let pts = activeDraggedSector.originalParents;
+                    
+                    if (pts && pts.length >= 3) {
+                        let v = pts[0], p1 = pts[1], p2 = pts[2];
+                        board.suspendUpdate();
+                        if (v && !v.visProp.fixed) v.setPositionDirectly(JXG.COORDS_BY_USER, [sectorOrigCoords.v[0] + dx, sectorOrigCoords.v[1] + dy]);
+                        if (p1 && !p1.visProp.fixed) p1.setPositionDirectly(JXG.COORDS_BY_USER, [sectorOrigCoords.p1[0] + dx, sectorOrigCoords.p1[1] + dy]);
+                        if (p2 && !p2.visProp.fixed) p2.setPositionDirectly(JXG.COORDS_BY_USER, [sectorOrigCoords.p2[0] + dx, sectorOrigCoords.p2[1] + dy]);
+                        board.unsuspendUpdate();
+                    }
+                    hasDraggedGraphic = true; board.update(); return;
+                }
+
                 if (currentMode === 'pointer') { if (board.mouse && board.mouse.obj) { hasDraggedGraphic = true; } }
 
-                if ((currentMode === 'circle' || currentMode === 'circle3p' || currentMode === 'line') && clickPoints.length > 0) {
+                if ((['circle', 'circle3p', 'line', 'sector'].includes(currentMode)) && clickPoints.length > 0) {
                     let pX = mouseX, pY = mouseY;
                     let minDist = 30 / board.unitX; 
                     for (let id in board.objects) {
                         let el = board.objects[id];
-                        if (['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible && el !== clickPoints[0] && el !== clickPoints[1]) {
+                        if (el && ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp && el.visProp.visible && el !== clickPoints[0] && el !== clickPoints[1]) {
                             let d = Math.hypot(el.X() - mouseX, el.Y() - mouseY);
                             if (d < minDist) { minDist = d; pX = el.X(); pY = el.Y(); }
                         }
                     }
 
                     if (!shapePreviewPoint) {
-                        shapePreviewPoint = board.create('point', [pX, pY], {visible: false});
                         let selectedColor = document.getElementById('color-picker').value;
-                        if (currentMode === 'circle') {
-                            shapePreviewRadius = board.create('segment', [clickPoints[0], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#6b7280'});
-                            shapePreviewObj = board.create('circle', [clickPoints[0], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#9ca3af', fillColor: 'none', fillOpacity: 0, highlight: false});
-                        } else if (currentMode === 'circle3p') {
-                            if (clickPoints.length === 1) {
-                                shapePreviewObj = board.create('segment', [clickPoints[0], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: selectedColor, highlight: false});
-                            } else if (clickPoints.length === 2) {
-                                shapePreviewRadius = board.create('segment', [clickPoints[1], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: selectedColor, highlight: false});
-                            }
+                        if (currentMode === 'sector' && clickPoints.length === 2) {
+                            shapePreviewRadius = board.create('circle', [clickPoints[0], clickPoints[1]], {visible: false, strokeWidth: 0, hasInnerPoints: false});
+                            shapePreviewPoint = board.create('glider', [pX, pY, shapePreviewRadius], {visible: false});
+                            shapePreviewObj = board.create('sector', [clickPoints[0], clickPoints[1], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: selectedColor, fillColor: 'none', fillOpacity: 0, highlight: false, hasInnerPoints: true});
                         } else {
-                            shapePreviewObj = board.create('segment', [clickPoints[0], shapePreviewPoint], {strokeWidth: 2, strokeColor: selectedColor, dash: 2, highlight: false});
+                            shapePreviewPoint = board.create('point', [pX, pY], {visible: false});
+                            if (currentMode === 'circle') {
+                                shapePreviewRadius = board.create('segment', [clickPoints[0], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#6b7280'});
+                                shapePreviewObj = board.create('circle', [clickPoints[0], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: '#9ca3af', fillColor: 'none', fillOpacity: 0, highlight: false, hasInnerPoints: true});
+                            } else if (currentMode === 'circle3p') {
+                                if (clickPoints.length === 1) {
+                                    shapePreviewObj = board.create('segment', [clickPoints[0], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: selectedColor, highlight: false});
+                                } else if (clickPoints.length === 2) {
+                                    shapePreviewRadius = board.create('segment', [clickPoints[1], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: selectedColor, highlight: false});
+                                }
+                            } else if (currentMode === 'sector' && clickPoints.length === 1) {
+                                shapePreviewObj = board.create('segment', [clickPoints[0], shapePreviewPoint], {strokeWidth: 1, dash: 2, strokeColor: selectedColor, highlight: false});
+                            } else {
+                                shapePreviewObj = board.create('segment', [clickPoints[0], shapePreviewPoint], {strokeWidth: 2, strokeColor: selectedColor, dash: 2, highlight: false});
+                            }
                         }
                     } else {
                         shapePreviewPoint.moveTo([pX, pY]); board.update();
@@ -1241,7 +1414,7 @@
                 let closestSegment = null, minDistLine = 0.8, bestT = -1;
                 for (let id in board.objects) {
                     let el = board.objects[id];
-                    if (['line', 'segment'].includes(el.elType) && el.point1 && el.point2) {
+                    if (el && ['line', 'segment'].includes(el.elType) && el.point1 && el.point2) {
                         let p1 = el.point1, p2 = el.point2;
                         let dx = p2.X() - p1.X(), dy = p2.Y() - p1.Y();
                         let l2 = dx*dx + dy*dy;
@@ -1290,10 +1463,10 @@
                 if (e.button === 2) {
                     if (window.handleCancel && window.handleCancel()) return; 
                     
-                    let els = board.getAllObjectsUnderMouse(e);
+                    let els = board.getAllObjectsUnderMouse(e).filter(el => el && el.elType !== 'image');
                     let targetTypes = ['line', 'segment', 'circle', 'circumcircle', 'angle'];
-                    let target = els.find(el => targetTypes.includes(el.elType) && el.visProp.visible);
-                    if (target) {
+                    let target = els.find(el => el && (targetTypes.includes(el.elType) || el.isSector));
+                    if (target && target.visProp && target.visProp.visible) {
                         let currentDash = target.visProp.dash || 0; target.setAttribute({dash: currentDash === 0 ? 2 : 0});
                         board.update(); triggerSave(); 
                     }
@@ -1301,18 +1474,20 @@
                 }
 
                 if (currentMode === 'pointer') {
-                    let els = board.getAllObjectsUnderMouse(e);
+                    let els = board.getAllObjectsUnderMouse(e).filter(el => el && el.elType !== 'image');
+                    
                     let targetNode = e.target || e.srcElement; let textEl = null;
-
                     for (let i = 0; i < els.length; i++) {
-                        let el = els[i]; let cssStr = (el.visProp.cssclass || el.visProp.cssClass || '');
+                        let el = els[i]; 
+                        if (!el || !el.visProp) continue;
+                        let cssStr = (el.visProp.cssclass || el.visProp.cssClass || '');
                         if (el.elType === 'text' && !cssStr.includes('static-text') && !cssStr.includes('snap-label')) {
                             if (el.rendNode && el.rendNode.contains(targetNode)) { textEl = el; break; }
                         }
                     }
                     
                     if (textEl) {
-                        let parent = Object.values(board.objects).find(obj => obj.label === textEl || obj.customTextObj === textEl);
+                        let parent = Object.values(board.objects).find(obj => obj && (obj.label === textEl || obj.customTextObj === textEl));
                         if (!parent && textEl.parent) parent = textEl.parent; 
                         if (parent) {
                             activeLabel = textEl; activeLabelParent = parent;
@@ -1321,6 +1496,26 @@
                             board.dehighlightAll(); return; 
                         }
                     }
+
+                    // 准确捕获底层拖拽原点
+                    let sectorEl = els.find(el => el && el.isSector);
+                    let pointEl = els.find(el => el && ['point', 'glider'].includes(el.elType));
+                    if (sectorEl && !pointEl) {
+                        activeDraggedSector = sectorEl;
+                        sectorDragStartUsr = board.getUsrCoordsOfMouse(e);
+                        let pts = sectorEl.originalParents;
+                        if (pts && pts.length >= 3) {
+                            sectorOrigCoords = {
+                                v: [pts[0].X(), pts[0].Y()],
+                                p1: [pts[1].X(), pts[1].Y()],
+                                p2: [pts[2].X(), pts[2].Y()]
+                            };
+                        }
+                        if (board.mouse) board.mouse.obj = null; 
+                        board.dehighlightAll();
+                        return;
+                    }
+                    
                     return; 
                 }
 
@@ -1328,24 +1523,29 @@
                 
                 let coords = board.getUsrCoordsOfMouse(e);
                 let actualClickCoords = [coords[0], coords[1]];
-                let els = board.getAllObjectsUnderMouse(e);
+                let els = board.getAllObjectsUnderMouse(e).filter(el => el && el.elType !== 'image');
 
                 let promptModal = document.getElementById('prompt-modal');
                 if (!promptModal.classList.contains('hidden')) {
-                    let targetSeg = els.find(el => ['segment', 'line'].includes(el.elType));
+                    let targetSeg = els.find(el => el && ['segment', 'line'].includes(el.elType));
                     if (targetSeg) {
                         let insertStr = (targetSeg.point1 ? getPtName(targetSeg.point1) : '') + (targetSeg.point2 ? getPtName(targetSeg.point2) : '');
                         if (insertStr) { document.getElementById('latex-input').value += insertStr; document.getElementById('latex-input').focus(); return; }
                     }
                     
-                    let targetPt = els.find(el => ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint);
+                    let targetPt = els.find(el => el && ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint);
                     
                     let potentialVertex = targetPt;
+                    let clickedSector = els.find(el => el && (el.elType === 'sector' || el.isSector));
+                    if (!potentialVertex && clickedSector && clickedSector.originalParents) {
+                        potentialVertex = clickedSector.originalParents[0];
+                    }
+
                     if (!potentialVertex) {
                         let bestDist = Infinity;
                         for(let id in board.objects) {
                             let el = board.objects[id];
-                            if (['point', 'glider'].includes(el.elType) && el.visProp.visible && el !== snapPreviewPoint && el !== shapePreviewPoint) {
+                            if (el && ['point', 'glider'].includes(el.elType) && el.visProp && el.visProp.visible && el !== snapPreviewPoint && el !== shapePreviewPoint) {
                                 let d = Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]);
                                 if (d < bestDist && d < 8.0) { 
                                     bestDist = d; potentialVertex = el; 
@@ -1372,12 +1572,18 @@
                 }
 
                 if (currentMode === 'markAngle') {
-                    let v = els.find(el => ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint);
+                    let v = els.find(el => el && ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint);
+                    let clickedSector = els.find(el => el && (el.elType === 'sector' || el.isSector));
+                    
+                    if (!v && clickedSector && clickedSector.originalParents) {
+                        v = clickedSector.originalParents[0];
+                    }
+
                     if (!v) {
                         let bestDist = Infinity;
                         for(let id in board.objects) {
                             let el = board.objects[id];
-                            if (['point', 'glider'].includes(el.elType) && el.visProp.visible && el !== snapPreviewPoint && el !== shapePreviewPoint) {
+                            if (el && ['point', 'glider'].includes(el.elType) && el.visProp && el.visProp.visible && el !== snapPreviewPoint && el !== shapePreviewPoint) {
                                 let d = Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]);
                                 if (d < bestDist && d < 8.0) { bestDist = d; v = el; }
                             }
@@ -1398,16 +1604,16 @@
                     if (els.length > 0) {
                         let selectedColor = document.getElementById('color-picker').value;
                         
-                        let target = els.find(el => ['segment', 'line'].includes(el.elType)) || 
-                                     els.find(el => ['circle', 'circumcircle'].includes(el.elType)) || 
-                                     els.find(el => el.elType === 'angle');
+                        let target = els.find(el => el && ['segment', 'line'].includes(el.elType)) || 
+                                     els.find(el => el && (['circle', 'circumcircle'].includes(el.elType) || el.isSector)) || 
+                                     els.find(el => el && el.elType === 'angle');
                         
                         if (target) {
                             target.setAttribute({strokeColor: selectedColor});
-                            if (target.hasPoint || ['angle', 'circle', 'circumcircle'].includes(target.elType)) target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
-                            board.update();
-                            triggerSave(); 
-                            return;
+                            if (target.hasPoint || ['angle', 'circle', 'circumcircle'].includes(target.elType) || target.isSector) {
+                                target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
+                            }
+                            board.update(); triggerSave(); return;
                         }
                         
                         let candidates = findPolygonRegions(actualClickCoords);
@@ -1416,16 +1622,15 @@
                             return;
                         }
                         
-                        target = els.find(el => !['point', 'glider'].includes(el.elType)) || els[0];
+                        target = els.find(el => el && !['point', 'glider'].includes(el.elType)) || els[0];
                         if (target) {
                             target.setAttribute({strokeColor: selectedColor});
                             if (target.elType === 'polygon') {
                                 target.setAttribute({fillColor: selectedColor, fillOpacity: 0.2});
-                            } else if (target.hasPoint || ['angle', 'circle', 'circumcircle'].includes(target.elType)) {
+                            } else if (target.hasPoint || ['angle', 'circle', 'circumcircle'].includes(target.elType) || target.isSector) {
                                 target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
                             }
-                            board.update();
-                            triggerSave(); 
+                            board.update(); triggerSave(); 
                         }
                     }
                     return; 
@@ -1433,10 +1638,15 @@
                 else if (currentMode === 'eraser') {
                     if (els.length > 0) {
                         const targetTypes = ['point', 'glider', 'line', 'segment', 'circle', 'circumcircle', 'polygon', 'angle', 'text', 'midpoint'];
-                        let validTargets = els.filter(el => targetTypes.includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible && !(el.id.includes('ticks') || el.id.includes('Axes')));
+                        let validTargets = els.filter(el => el && 
+                            (targetTypes.includes(el.elType) || el.isSector) && 
+                            el !== snapPreviewPoint && 
+                            el !== shapePreviewPoint && 
+                            el.visProp && el.visProp.visible && 
+                            !(el.id.includes('ticks') || el.id.includes('Axes'))
+                        );
                         if (validTargets.length === 1) {
-                            performErase(validTargets[0]); board.update();
-                            triggerSave(); 
+                            performErase(validTargets[0]); board.update(); triggerSave(); 
                         } else if (validTargets.length > 1) {
                             let items = validTargets.map(el => {
                                 let desc = '未知元素';
@@ -1446,6 +1656,7 @@
                                 else if (el.elType === 'polygon') desc = '多边形';
                                 else if (el.elType === 'angle') desc = '角 ' + (el.customLabel || '');
                                 else if (['circle', 'circumcircle'].includes(el.elType)) desc = '圆';
+                                else if (el.isSector) desc = '扇形/弧';
                                 else if (el.elType === 'text') desc = '文本/公式';
                                 return { id: el.id, desc: desc, obj: el };
                             });
@@ -1458,7 +1669,7 @@
                     return;
                 }
                 else if (currentMode === 'point') {
-                    let isPointUnderMouse = els.some(el => ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp.visible);
+                    let isPointUnderMouse = els.some(el => el && ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint && el.visProp && el.visProp.visible);
                     if (!isPointUnderMouse) {
                         let finalCoords = (snapPreviewPoint && snapPreviewPoint.X() !== 9999) ? [snapPreviewPoint.X(), snapPreviewPoint.Y()] : actualClickCoords;
                         let currentSlideObj = activeSnapSegment; 
@@ -1479,38 +1690,70 @@
                                 if (snapPreviewPoint.label) snapPreviewPoint.label.setText('吸附');
                                 board.update(); 
                             }
-                            activeSnapSegment = null;
-                            triggerSave(); 
-                            return true;
+                            activeSnapSegment = null; triggerSave(); return true;
                         });
                     }
                 } 
-                else if (currentMode === 'text') {
-                    pendingTextCoords = actualClickCoords;
-                    document.getElementById('prompt-modal').classList.remove('hidden');
-                    let inputField = document.getElementById('latex-input'); inputField.value = ''; 
-                    setTimeout(() => { inputField.focus(); }, 50); 
-                }
                 else {
                     let p;
                     let isPointUnderMouse = false, clickedPoint = null;
                     for (let i = 0; i < els.length; i++) {
-                        if (['point', 'glider'].includes(els[i].elType) && els[i] !== snapPreviewPoint && els[i] !== shapePreviewPoint && els[i].visProp.visible) {
+                        if (els[i] && ['point', 'glider'].includes(els[i].elType) && els[i] !== snapPreviewPoint && els[i] !== shapePreviewPoint && els[i].visProp && els[i].visProp.visible) {
                             isPointUnderMouse = true; clickedPoint = els[i]; break;
                         }
                     }
                     
+                    if (currentMode === 'sector' && clickPoints.length === 2) {
+                        let center = clickPoints[0];
+                        let p1 = clickPoints[1];
+                        
+                        let targetX = actualClickCoords[0];
+                        let targetY = actualClickCoords[1];
+                        if (isPointUnderMouse && clickedPoint !== center && clickedPoint !== p1) {
+                            targetX = clickedPoint.X();
+                            targetY = clickedPoint.Y();
+                        } else if (activeSnapSegment && snapPreviewPoint && snapPreviewPoint.X() !== 9999) {
+                            targetX = snapPreviewPoint.X();
+                            targetY = snapPreviewPoint.Y();
+                        }
+                        
+                        let angle = Math.atan2(targetY - center.Y(), targetX - center.X());
+                        let r = Math.hypot(p1.X() - center.X(), p1.Y() - center.Y());
+                        let projX = center.X() + r * Math.cos(angle);
+                        let projY = center.Y() + r * Math.sin(angle);
+                        
+                        let invisCirc = board.create('circle', [center, p1], {visible: false, strokeWidth: 0, hasInnerPoints: false});
+                        invisCirc.isSectorPath = true;
+                        
+                        let autoName = getNextAutoPointName(false);
+                        let props = { size: 3, name: autoName, fillColor: '#3b82f6', visible: isPointsVisible, withLabel: true, label: { offset: [15, 15] } };
+                        
+                        p = board.create('glider', [projX, projY, invisCirc], props);
+                        tempNewPoints.push(p);
+                        
+                        let selectedColor = document.getElementById('color-picker').value;
+                        if (shapePreviewObj) { board.removeObject(shapePreviewObj); shapePreviewObj = null; }
+                        if (shapePreviewPoint) { board.removeObject(shapePreviewPoint); shapePreviewPoint = null; }
+                        if (shapePreviewRadius) { board.removeObject(shapePreviewRadius); shapePreviewRadius = null; }
+                        tempLines.forEach(l => board.removeObject(l)); tempLines = [];
+                        
+                        let sec = board.create('sector', [center, p1, p], { strokeWidth: 2, strokeColor: selectedColor, fillColor: 'none', fillOpacity: 0, highlight: false, hasInnerPoints: true });
+                        sec.isSector = true; 
+                        sec.originalParents = [center, p1, p];
+                        
+                        clickPoints = []; tempNewPoints = []; triggerSave();
+                        return; 
+                    }
+
                     if (isPointUnderMouse) {
                         p = clickedPoint; 
                         if (currentMode === 'polygon' && clickPoints.length >= 2 && p === clickPoints[0]) {
                             let selectedColor = document.getElementById('color-picker').value;
                             board.create('polygon', clickPoints, {
-                                fillColor: 'none', fillOpacity: 0, hasInnerPoints: true, highlightFillColor: 'none', highlightFillOpacity: 0, borders: { strokeColor: selectedColor, strokeWidth: 2, fixed: true }
+                                fillColor: 'none', fillOpacity: 0, hasInnerPoints: true, highlight: false, borders: { strokeColor: selectedColor, strokeWidth: 2, fixed: true }
                             });
                             tempLines.forEach(line => board.removeObject(line)); tempLines = []; clickPoints = [];
-                            tempNewPoints = [];
-                            triggerSave(); 
-                            return; 
+                            tempNewPoints = []; triggerSave(); return; 
                         }
                     } else {
                         let isCircleCenter = (currentMode === 'circle' && clickPoints.length === 0);
@@ -1522,9 +1765,16 @@
                         else { p = board.create('point', finalCoords, props); }
                         
                         tempNewPoints.push(p);
-                        if (!['circle', 'circle3p', 'line', 'polygon'].includes(currentMode)) triggerSave();
+                        if (!['circle', 'circle3p', 'sector', 'line', 'polygon'].includes(currentMode)) triggerSave();
                     }
                     clickPoints.push(p);
+
+                    // 瞬间销毁残留预览，防死锁
+                    if (['polygon', 'circle3p', 'sector'].includes(currentMode) && clickPoints.length > 0) {
+                        if (shapePreviewObj) { board.removeObject(shapePreviewObj); shapePreviewObj = null; }
+                        if (shapePreviewPoint) { board.removeObject(shapePreviewPoint); shapePreviewPoint = null; }
+                        if (shapePreviewRadius) { board.removeObject(shapePreviewRadius); shapePreviewRadius = null; }
+                    }
 
                     if (currentMode === 'polygon' && clickPoints.length > 1) {
                         let tempLine = board.create('segment', [clickPoints[clickPoints.length - 2], p], { strokeColor: '#9ca3af', strokeWidth: 1, dash: 2 });
@@ -1532,6 +1782,11 @@
                     }
 
                     if (currentMode === 'circle3p' && clickPoints.length === 2) {
+                        let tempLine = board.create('segment', [clickPoints[0], clickPoints[1]], { strokeColor: '#9ca3af', strokeWidth: 1, dash: 2 });
+                        tempLines.push(tempLine);
+                    }
+
+                    if (currentMode === 'sector' && clickPoints.length === 2) {
                         let tempLine = board.create('segment', [clickPoints[0], clickPoints[1]], { strokeColor: '#9ca3af', strokeWidth: 1, dash: 2 });
                         tempLines.push(tempLine);
                     }
@@ -1545,14 +1800,14 @@
                     else if (currentMode === 'circle' && clickPoints.length === 2) {
                         let selectedColor = document.getElementById('color-picker').value;
                         if (shapePreviewObj) { board.removeObject(shapePreviewObj); board.removeObject(shapePreviewPoint); board.removeObject(shapePreviewRadius); shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null; }
-                        board.create('circle', [clickPoints[0], clickPoints[1]], { strokeWidth: 2, strokeColor: selectedColor, fillColor: 'none', fillOpacity: 0, highlightFillColor: 'none', highlightFillOpacity: 0 });
+                        board.create('circle', [clickPoints[0], clickPoints[1]], { strokeWidth: 2, strokeColor: selectedColor, fillColor: 'none', fillOpacity: 0, highlight: false, hasInnerPoints: true });
                         clickPoints = []; tempNewPoints = []; triggerSave(); 
                     }
                     else if (currentMode === 'circle3p' && clickPoints.length === 3) {
                         let selectedColor = document.getElementById('color-picker').value;
                         if (shapePreviewObj) { board.removeObject(shapePreviewObj); board.removeObject(shapePreviewPoint); board.removeObject(shapePreviewRadius); shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null; }
                         tempLines.forEach(l => board.removeObject(l)); tempLines = [];
-                        let circ = board.create('circumcircle', [clickPoints[0], clickPoints[1], clickPoints[2]], { strokeWidth: 2, strokeColor: selectedColor, fillColor: 'none', fillOpacity: 0, highlightFillColor: 'none', highlightFillOpacity: 0 });
+                        let circ = board.create('circumcircle', [clickPoints[0], clickPoints[1], clickPoints[2]], { strokeWidth: 2, strokeColor: selectedColor, fillColor: 'none', fillOpacity: 0, highlight: false, hasInnerPoints: true });
                         circ.isCircle3P = true; circ.originalParents = [...clickPoints];
                         clickPoints = []; tempNewPoints = []; triggerSave();
                     }
@@ -1560,6 +1815,10 @@
             });
             
             board.on('up', function(e) {
+                if (activeDraggedSector) {
+                    activeDraggedSector = null;
+                    hasDraggedGraphic = true;
+                }
                 if (activeLabelParent) {
                     activeLabelParent.setAttribute({fixed: false});
                     activeLabel = null; activeLabelParent = null;
@@ -1604,7 +1863,7 @@
             if(window.handleCancel) window.handleCancel();
             JXG.JSXGraph.freeBoard(board); document.getElementById('jxgbox').innerHTML = '';
             clickPoints = []; tempLines = []; tempNewPoints = []; shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null;
-            snapPreviewPoint = null; activeSnapSegment = null;
+            snapPreviewPoint = null; activeSnapSegment = null; activeDraggedSector = null;
             angleColorIdx = 1; pointCharCode = 68; 
             isAxesVisible = true; isPointsVisible = true; isAnglesVisible = true;
             document.getElementById('btn-toggle-axes').innerText = '👁️ 坐标';
@@ -1709,12 +1968,13 @@
 
             const statusBar = document.getElementById('status-bar');
             const messages = {
-                'pointer': '当前模式：选择。拖拽图形内部可平移，拖拽顶点变形，拖拽字母可单独调整文字位置。',
+                'pointer': '当前模式：选择。拖拽图形内部可平移，拖拽顶点变形，拖拽字母可单独调整文字位置。支持随时按 ESC 取消动作。支持 Ctrl+V 粘贴原题作为背景。',
                 'pan': '当前模式：漫游。在画布空白处按住鼠标左键即可随意移动视角。所有模式均支持滚轮缩放。',
                 'point': '当前模式：加点。靠近线段自动吸附绑定，支持连按回车按字母顺序自动递增。',
                 'line': '当前模式：连线。连续点击两个位置以绘制一条线段。按 Esc 或右键取消。',
                 'circle': '当前模式：定圆心画圆。点击确定圆心，拖动鼠标出现预览，再次点击确定。按 Esc 或右键取消。',
                 'circle3p': '当前模式：三点画圆。依次点击三个不同的点绘制圆。按 Esc 或右键取消。',
+                'sector': '当前模式：画扇形(弧)。依次点击：圆心、起点、终点。逆时针生成扇形。按 Esc 或右键取消。',
                 'polygon': '当前模式：多边形。依次点击各个顶点，最后回到起点点击以闭合多边形。按 Esc 或右键取消。',
                 'markAngle': '当前模式：标角。点击角内部，自动出全能面板（包含修改与多角选择）。',
                 'text': '当前模式：公式。点击线段/顶点自动录入名称；点击【角区域】自动弹出选角面板供你精准拾取！',
