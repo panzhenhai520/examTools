@@ -12,6 +12,9 @@
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css" />
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraphcore.js"></script>
 
+    <!-- 引入 html2canvas 用于自适应高解析度导出图像 -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
     <!-- 配置并引入 MathJax 用于渲染数学公式 -->
     <script>
         window.MathJax = {
@@ -200,6 +203,7 @@
                 <div class="h-6 w-px bg-gray-300 mx-1"></div>
                 <button onclick="document.getElementById('bg-upload').click()" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-gray-200" title="支持直接 Ctrl+V 粘贴截图">🖼️ 传图</button>
                 <button onclick="clearBackgrounds()" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-red-500 hover:bg-red-50" title="清空所有背景图">🗑️ 删图</button>
+                <button onclick="exportToPNG()" id="btn-export" class="tool-btn px-3 py-1.5 rounded-md text-sm font-medium transition-colors text-green-600 hover:bg-green-50" title="自适应导出为 PNG 图片">💾 导出</button>
                 
                 <div class="h-6 w-px bg-gray-300 mx-1"></div>
                 <input type="color" id="color-picker" value="#2563eb" class="h-8 w-8 rounded-md cursor-pointer border-0 p-0" title="选择颜色">
@@ -399,6 +403,131 @@
         });
 
 
+        // ================= 【自适应画布导出为PNG引擎】 =================
+        function getBoardContentBounds() {
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            let hasContent = false;
+            
+            for (let id in board.objects) {
+                let el = board.objects[id];
+                if (!el || !el.visProp || el.visProp.visible === false) continue;
+                
+                if (el.id.indexOf('ticks') > -1 || el.id.indexOf('axes') > -1 || el.id.indexOf('grid') > -1) continue;
+                if (el === snapPreviewPoint || el === shapePreviewPoint || el === shapePreviewObj || el === shapePreviewRadius || tempLines.includes(el)) continue;
+                
+                if (['point', 'glider', 'intersection', 'text'].includes(el.elType)) {
+                    minX = Math.min(minX, el.X()); maxX = Math.max(maxX, el.X());
+                    minY = Math.min(minY, el.Y()); maxY = Math.max(maxY, el.Y());
+                    hasContent = true;
+                } else if (['circle', 'circumcircle'].includes(el.elType) || el.elType === 'arc') {
+                    if(el.center && typeof el.Radius === 'function') {
+                        let r = el.Radius();
+                        minX = Math.min(minX, el.center.X() - r); maxX = Math.max(maxX, el.center.X() + r);
+                        minY = Math.min(minY, el.center.Y() - r); maxY = Math.max(maxY, el.center.Y() + r);
+                        hasContent = true;
+                    }
+                } else if (el.elType === 'image') {
+                    let w = (el.size ? el.size[0] : 100) / board.unitX;
+                    let h = (el.size ? el.size[1] : 100) / board.unitY;
+                    minX = Math.min(minX, el.X()); maxX = Math.max(maxX, el.X() + w);
+                    minY = Math.min(minY, el.Y() - h); maxY = Math.max(maxY, el.Y());
+                    hasContent = true;
+                } else if (['segment', 'line'].includes(el.elType)) {
+                    if (el.point1 && el.point2) {
+                        minX = Math.min(minX, el.point1.X(), el.point2.X());
+                        maxX = Math.max(maxX, el.point1.X(), el.point2.X());
+                        minY = Math.min(minY, el.point1.Y(), el.point2.Y());
+                        maxY = Math.max(maxY, el.point1.Y(), el.point2.Y());
+                        hasContent = true;
+                    }
+                } else if (el.elType === 'polygon') {
+                    if (el.vertices) {
+                        for(let i = 0; i < el.vertices.length - 1; i++) {
+                            let v = el.vertices[i];
+                            minX = Math.min(minX, v.X()); maxX = Math.max(maxX, v.X());
+                            minY = Math.min(minY, v.Y()); maxY = Math.max(maxY, v.Y());
+                        }
+                        hasContent = true;
+                    }
+                }
+            }
+            
+            if (!hasContent) return null;
+            return { minX, maxX, minY, maxY };
+        }
+
+        async function exportToPNG() {
+            let btn = document.getElementById('btn-export');
+            let oldText = btn.innerText;
+            btn.innerText = '⏳ 导出中...';
+            
+            window.handleCancel();
+            
+            let nav = document.querySelector('.JXG_navigation');
+            if (nav) nav.style.display = 'none';
+            
+            await new Promise(r => setTimeout(r, 150));
+            
+            try {
+                let jxgbox = document.getElementById('jxgbox');
+                let scale = window.devicePixelRatio || 2;
+                
+                let canvas = await html2canvas(jxgbox, {
+                    scale: scale, 
+                    backgroundColor: jxgbox.style.backgroundColor || '#ffffff',
+                    useCORS: true,
+                    logging: false
+                });
+                
+                let finalCanvas = canvas;
+                let bounds = getBoardContentBounds();
+                
+                if (bounds) {
+                    let pTL = new JXG.Coords(JXG.COORDS_BY_USER, [bounds.minX, bounds.maxY], board).scrCoords;
+                    let pBR = new JXG.Coords(JXG.COORDS_BY_USER, [bounds.maxX, bounds.minY], board).scrCoords;
+                    
+                    let pad = 60; 
+                    let cropX = pTL[1] - pad;
+                    let cropY = pTL[2] - pad;
+                    let cropW = (pBR[1] - pTL[1]) + pad * 2;
+                    let cropH = (pBR[2] - pTL[2]) + pad * 2;
+                    
+                    let cW = jxgbox.offsetWidth;
+                    let cH = jxgbox.offsetHeight;
+                    
+                    cropX = Math.max(0, cropX);
+                    cropY = Math.max(0, cropY);
+                    if (cropX + cropW > cW) cropW = cW - cropX;
+                    if (cropY + cropH > cH) cropH = cH - cropY;
+                    
+                    if (cropW > 50 && cropH > 50) {
+                        let croppedCanvas = document.createElement('canvas');
+                        croppedCanvas.width = cropW * scale;
+                        croppedCanvas.height = cropH * scale;
+                        let ctx = croppedCanvas.getContext('2d');
+                        
+                        ctx.drawImage(canvas, 
+                            cropX * scale, cropY * scale, cropW * scale, cropH * scale, 
+                            0, 0, cropW * scale, cropH * scale);
+                            
+                        finalCanvas = croppedCanvas;
+                    }
+                }
+                
+                let link = document.createElement('a');
+                link.download = `几何画板导出_${new Date().getTime()}.png`;
+                link.href = finalCanvas.toDataURL('image/png');
+                link.click();
+                
+            } catch(e) {
+                console.error("导出失败:", e);
+                alert("导出失败，请检查浏览器控制台报错。");
+            } finally {
+                if (nav) nav.style.display = '';
+                btn.innerText = oldText;
+            }
+        }
+
         // ================= 【撤销重做 & 状态管理】 =================
         function dumpBoardState() {
             let state = { points: [], lines: [], circles: [], circumcircles: [], sectors: [], polygons: [], angles: [], texts: [], images: [] };
@@ -407,10 +536,13 @@
                 if (!el || !el.elType || !el.visProp) continue;
                 let idLower = el.id.toLowerCase();
                 if (idLower.indexOf('ticks') > -1 || idLower.indexOf('axes') > -1 || idLower.indexOf('grid') > -1 || idLower.indexOf('infobox') > -1) continue;
-                if (el === snapPreviewPoint || el === shapePreviewPoint || el === shapePreviewObj || el === shapePreviewRadius) continue;
+                if (el === snapPreviewPoint || el === shapePreviewPoint || el === shapePreviewObj || el === shapePreviewRadius || tempLines.includes(el)) continue;
+
+                // 排除属于Sector面拆解出来的子组件，交给Sector统一保存
+                if (el.isSectorBorder) continue;
 
                 let isBorder = false;
-                if (['segment', 'line'].includes(el.elType)) {
+                if (['segment', 'line', 'arc'].includes(el.elType)) {
                     for (let pId in board.objects) {
                         if (board.objects[pId].elType === 'polygon' && board.objects[pId].borders && board.objects[pId].borders.includes(el)) { isBorder = true; break; }
                     }
@@ -443,7 +575,16 @@
                     if (el.isSector && el.originalParents) {
                         state.sectors.push({
                             oldId: el.id, p1: el.originalParents[0].id, p2: el.originalParents[1].id, p3: el.originalParents[2].id,
-                            color: el.visProp.strokecolor, fillColor: el.visProp.fillcolor, fillOpacity: el.visProp.fillopacity
+                            color: el.visProp.strokecolor, fillColor: el.visProp.fillcolor, fillOpacity: el.visProp.fillopacity,
+                            arcOldId: el.arcObj ? el.arcObj.id : null,
+                            arcDash: el.arcObj ? (el.arcObj.visProp.dash || 0) : 0,
+                            arcColor: el.arcObj ? el.arcObj.visProp.strokecolor : el.visProp.strokecolor,
+                            r1OldId: el.r1Obj ? el.r1Obj.id : null,
+                            r1Dash: el.r1Obj ? (el.r1Obj.visProp.dash || 0) : 0,
+                            r1Color: el.r1Obj ? el.r1Obj.visProp.strokecolor : el.visProp.strokecolor,
+                            r2OldId: el.r2Obj ? el.r2Obj.id : null,
+                            r2Dash: el.r2Obj ? (el.r2Obj.visProp.dash || 0) : 0,
+                            r2Color: el.r2Obj ? el.r2Obj.visProp.strokecolor : el.visProp.strokecolor
                         });
                     } else if (el.isCircle3P && el.originalParents) {
                         state.circumcircles.push({
@@ -451,7 +592,7 @@
                             p1: el.originalParents[0].id, p2: el.originalParents[1].id, p3: el.originalParents[2].id,
                             color: el.visProp.strokecolor, fillColor: el.visProp.fillcolor, fillOpacity: el.visProp.fillopacity
                         });
-                    } else if(el.center && el.point2) {
+                    } else if(el.center && el.point2 && !el.isSector) {
                         state.circles.push({ oldId: el.id, center: el.center.id, p2: el.point2.id, color: el.visProp.strokecolor, fillColor: el.visProp.fillcolor, fillOpacity: el.visProp.fillopacity, isSectorPath: el.isSectorPath, visible: el.visProp.visible });
                     }
                 } else if (el.elType === 'polygon') {
@@ -697,9 +838,24 @@
                 state.data.sectors.forEach(c => {
                     let p1 = idMap[c.p1], p2 = idMap[c.p2], p3 = idMap[c.p3];
                     if (p1 && p2 && p3) {
-                        let sec = board.create('sector', [p1, p2, p3], { strokeWidth: 2, strokeColor: c.color, fillColor: c.fillColor, fillOpacity: c.fillOpacity, highlight: false, hasInnerPoints: true });
+                        let sec = board.create('sector', [p1, p2, p3], { strokeWidth: 0, fillColor: c.fillColor, fillOpacity: c.fillOpacity, highlight: false, hasInnerPoints: true });
                         sec.isSector = true;
                         sec.originalParents = [p1, p2, p3];
+                        
+                        let arc = board.create('arc', [p1, p2, p3], { strokeWidth: 2, strokeColor: c.arcColor || c.color, dash: c.arcDash || 0 });
+                        arc.isSectorBorder = true; arc.parentSector = sec;
+                        if (c.arcOldId) idMap[c.arcOldId] = arc;
+                        
+                        let r1 = board.create('segment', [p1, p2], { strokeWidth: 2, strokeColor: c.r1Color || c.color, dash: c.r1Dash || 0 });
+                        r1.isSectorBorder = true; r1.parentSector = sec;
+                        if (c.r1OldId) idMap[c.r1OldId] = r1;
+                        
+                        let r2 = board.create('segment', [p1, p3], { strokeWidth: 2, strokeColor: c.r2Color || c.color, dash: c.r2Dash || 0 });
+                        r2.isSectorBorder = true; r2.parentSector = sec;
+                        if (c.r2OldId) idMap[c.r2OldId] = r2;
+
+                        sec.arcObj = arc; sec.r1Obj = r1; sec.r2Obj = r2;
+                        
                         idMap[c.oldId] = sec;
                     }
                 });
@@ -810,7 +966,7 @@
             for (let id in board.objects) {
                 let el = board.objects[id];
                 if (el && ['point', 'glider', 'intersection'].includes(el.elType) && el.visProp && el.visProp.visible) {
-                    if (el === snapPreviewPoint || el === shapePreviewPoint) continue;
+                    if (el === snapPreviewPoint || el === shapePreviewPoint || tempLines.includes(el)) continue;
                     minX = Math.min(minX, el.X()); maxX = Math.max(maxX, el.X()); minY = Math.min(minY, el.Y()); maxY = Math.max(maxY, el.Y()); hasPoints = true;
                 }
             }
@@ -859,12 +1015,42 @@
             return pt.id || '?';
         }
 
-        // ================= 【极角数学探测器（全系透视支持扇形）】 =================
+        // ================= 【完美全域雷达与角度透视引擎】 =================
+        function checkSegmentSnap(p1, p2, mouseX, mouseY, minDist, objToBind, labelPrefix) {
+            if (!p1 || !p2) return null;
+            let dx = p2.X() - p1.X(), dy = p2.Y() - p1.Y();
+            let l2 = dx*dx + dy*dy;
+            if (l2 > 0.01) {
+                let t = ((mouseX - p1.X()) * dx + (mouseY - p1.Y()) * dy) / l2;
+                if (t >= 0.02 && t <= 0.98) {
+                    let projX = p1.X() + t * dx, projY = p1.Y() + t * dy;
+                    let dist = Math.hypot(mouseX - projX, mouseY - projY);
+                    if (dist < minDist) {
+                        let shortRatio = Math.min(t, 1 - t);
+                        let bestFraction = null, snapT = t; 
+                        const fractions = [{t: 1/2, label: '1/2'}, {t: 1/3, label: '1/3'}, {t: 2/3, label: '1/3'}, {t: 1/4, label: '1/4'}, {t: 3/4, label: '1/4'}, {t: 1/5, label: '1/5'}, {t: 4/5, label: '1/5'}, {t: 2/5, label: '2/5'}, {t: 3/5, label: '2/5'}];
+                        let snapTolerance = 0.8 / Math.hypot(dx, dy); 
+                        for (let f of fractions) { if (Math.abs(t - f.t) < snapTolerance) { bestFraction = f; snapT = f.t; break; } }
+                        return {
+                            dist: dist,
+                            obj: objToBind,
+                            x: p1.X() + snapT * dx,
+                            y: p1.Y() + snapT * dy,
+                            label: bestFraction ? (`${labelPrefix}短/总 = ` + bestFraction.label) : (`${labelPrefix}短/总 ≈ ` + shortRatio.toFixed(2))
+                        };
+                    }
+                }
+            }
+            return null;
+        }
+
         function getAllAnglesFromVertex(v, clickCoords) {
             let segments = [];
             for (let id in board.objects) {
                 let el = board.objects[id];
                 if (!el) continue;
+                if (el === shapePreviewObj || el === shapePreviewRadius || tempLines.includes(el)) continue;
+
                 if (['segment', 'line'].includes(el.elType)) {
                     if (el.point1 === v) segments.push(el.point2);
                     else if (el.point2 === v) segments.push(el.point1);
@@ -893,7 +1079,6 @@
                     }
                 } else if (el.elType === 'sector' || el.isSector) {
                     let pts = el.originalParents;
-                    // 只要圆心是该顶点，就提取其两条半径射线
                     if (pts && pts.length >= 3 && pts[0] === v) {
                         segments.push(pts[1]);
                         segments.push(pts[2]);
@@ -1106,6 +1291,8 @@
             for (let id in board.objects) {
                 let el = board.objects[id];
                 if (!el) continue;
+                if (el === shapePreviewObj || el === shapePreviewRadius || tempLines.includes(el)) continue;
+
                 if (['segment', 'line'].includes(el.elType)) {
                     if (isPointOnLine(A, el) && isPointOnLine(B, el)) return true;
                 } else if (el.elType === 'polygon') {
@@ -1250,9 +1437,12 @@
         function performErase(obj) {
             let ptsToCheck = [];
             let is3PCircle = ['circle', 'circumcircle'].includes(obj.elType) && obj.isCircle3P;
-            let isSector = obj.isSector;
             let cachedCenter = obj.center; 
             let circlesToRemove = [];
+
+            if (obj.isSectorBorder && obj.parentSector) {
+                obj = obj.parentSector;
+            }
 
             if (obj.elType === 'polygon') {
                 let verts = obj.vertices.slice(0, -1);
@@ -1271,12 +1461,16 @@
                     board.removeObject(a);
                 });
                 ptsToCheck = [...verts];
-            } else if (['circle', 'circumcircle'].includes(obj.elType) || isSector) {
+            } else if (['circle', 'circumcircle'].includes(obj.elType) || obj.isSector) {
                 if (obj.center) ptsToCheck.push(obj.center);
                 if (obj.point2) ptsToCheck.push(obj.point2);
                 if (obj.originalParents) ptsToCheck.push(...obj.originalParents);
                 
-                if (isSector) {
+                if (obj.isSector) {
+                    if (obj.arcObj) board.removeObject(obj.arcObj);
+                    if (obj.r1Obj) board.removeObject(obj.r1Obj);
+                    if (obj.r2Obj) board.removeObject(obj.r2Obj);
+
                     for (let id in board.objects) {
                         let c = board.objects[id];
                         if (c && c.elType === 'circle' && c.isSectorPath) {
@@ -1305,6 +1499,7 @@
                     let el = board.objects[id];
                     if (!el || !el.visProp || el === obj || el.id === obj.id) continue;
                     if (['point', 'glider', 'ticks', 'text', 'image'].includes(el.elType)) continue;
+                    if (el === shapePreviewObj || el === shapePreviewRadius || tempLines.includes(el)) continue;
                     
                     if (['segment', 'line'].includes(el.elType)) {
                         if (el.point1 === p || el.point2 === p) inUse = true;
@@ -1411,75 +1606,75 @@
                     return; 
                 }
 
-                // ================= 【完美全域曲线吸附雷达】 =================
-                let closestObj = null, minDistObj = 0.8, snapX = mouseX, snapY = mouseY, snapLabelStr = '';
+                // ================= 【全域吸附雷达：直线、圆弧、扇形边】 =================
+                let closestObj = null, minDistObj = 0.8, finalSnapX = mouseX, finalSnapY = mouseY, finalSnapLabel = '';
+
                 for (let id in board.objects) {
                     let el = board.objects[id];
                     if (!el || !el.visProp || el.visProp.visible === false) continue;
+                    if (['ticks', 'image', 'text', 'point', 'glider'].includes(el.elType)) continue;
+                    if (el.isSectorBorder) continue;
+                    if (el === shapePreviewObj || el === shapePreviewRadius || tempLines.includes(el)) continue;
 
-                    // 1. 直线与线段的吸附判定
                     if (['line', 'segment'].includes(el.elType) && el.point1 && el.point2) {
-                        let p1 = el.point1, p2 = el.point2;
-                        let dx = p2.X() - p1.X(), dy = p2.Y() - p1.Y();
-                        let l2 = dx*dx + dy*dy;
-                        if (l2 > 0.01) { 
-                            let t = ((mouseX - p1.X()) * dx + (mouseY - p1.Y()) * dy) / l2;
-                            if (t >= 0.02 && t <= 0.98) {
-                                let projX = p1.X() + t * dx, projY = p1.Y() + t * dy;
-                                let dist = Math.hypot(mouseX - projX, mouseY - projY);
-                                if (dist < minDistObj) { 
-                                    minDistObj = dist; 
-                                    closestObj = el; 
-                                    
-                                    let shortRatio = Math.min(t, 1 - t);
-                                    let bestFraction = null, snapT = t; 
-                                    const fractions = [{t: 1/2, label: '1/2'}, {t: 1/3, label: '1/3'}, {t: 2/3, label: '1/3'}, {t: 1/4, label: '1/4'}, {t: 3/4, label: '1/4'}, {t: 1/5, label: '1/5'}, {t: 4/5, label: '1/5'}, {t: 2/5, label: '2/5'}, {t: 3/5, label: '2/5'}];
-                                    let snapTolerance = 0.8 / Math.hypot(dx, dy); 
-                                    for (let f of fractions) { if (Math.abs(t - f.t) < snapTolerance) { bestFraction = f; snapT = f.t; break; } }
-                                    
-                                    snapLabelStr = bestFraction ? ('短/总 = ' + bestFraction.label) : ('短/总 ≈ ' + shortRatio.toFixed(2));
-                                    snapX = p1.X() + snapT * dx;
-                                    snapY = p1.Y() + snapT * dy;
-                                }
-                            }
-                        }
-                    } 
-                    // 2. 圆周与扇形弧的吸附判定
-                    else if ((['circle', 'circumcircle'].includes(el.elType) && !el.isSectorPath) || el.isSector) {
-                        let center, r;
-                        if (el.isSector && el.originalParents) {
-                            center = el.originalParents[0];
-                            r = Math.hypot(el.originalParents[1].X() - center.X(), el.originalParents[1].Y() - center.Y());
-                        } else if (el.center && typeof el.Radius === 'function') {
-                            center = el.center;
-                            r = el.Radius();
-                        }
+                        let snapRes = checkSegmentSnap(el.point1, el.point2, mouseX, mouseY, minDistObj, el, '');
+                        if (snapRes) { minDistObj = snapRes.dist; closestObj = snapRes.obj; finalSnapX = snapRes.x; finalSnapY = snapRes.y; finalSnapLabel = snapRes.label; }
+                    }
+                    else if (el.isSector && el.originalParents && el.originalParents.length >= 3) {
+                        let center = el.originalParents[0];
+                        let p1 = el.originalParents[1];
+                        let p2 = el.originalParents[2];
                         
-                        if (center && r > 0.01) {
+                        let snapRes1 = checkSegmentSnap(center, p1, mouseX, mouseY, minDistObj, el.r1Obj ? el.r1Obj : el, '半径 ');
+                        if (snapRes1) { minDistObj = snapRes1.dist; closestObj = snapRes1.obj; finalSnapX = snapRes1.x; finalSnapY = snapRes1.y; finalSnapLabel = snapRes1.label; }
+
+                        let snapRes2 = checkSegmentSnap(center, p2, mouseX, mouseY, minDistObj, el.r2Obj ? el.r2Obj : el, '半径 ');
+                        if (snapRes2) { minDistObj = snapRes2.dist; closestObj = snapRes2.obj; finalSnapX = snapRes2.x; finalSnapY = snapRes2.y; finalSnapLabel = snapRes2.label; }
+
+                        let r = Math.hypot(p1.X() - center.X(), p1.Y() - center.Y());
+                        if (r > 0.01) {
                             let d = Math.hypot(mouseX - center.X(), mouseY - center.Y());
                             if (Math.abs(d - r) < minDistObj) {
                                 let aMouse = Math.atan2(mouseY - center.Y(), mouseX - center.X());
-                                let isValid = true;
+                                let a1 = Math.atan2(p1.Y() - center.Y(), p1.X() - center.X());
+                                let a2 = Math.atan2(p2.Y() - center.Y(), p2.X() - center.X());
+                                if (a1 < 0) a1 += 2*Math.PI; if (a2 < 0) a2 += 2*Math.PI; if (aMouse < 0) aMouse += 2*Math.PI;
+
+                                let diff = a2 - a1; while(diff <= 0) diff += 2*Math.PI;
+                                let mDiff = aMouse - a1; while(mDiff < 0) mDiff += 2*Math.PI;
                                 
-                                // 如果是扇形，必须确保鼠标在夹角区间之内
-                                if (el.isSector && el.originalParents) {
-                                    let p1 = el.originalParents[1], p2 = el.originalParents[2];
-                                    let a1 = Math.atan2(p1.Y() - center.Y(), p1.X() - center.X());
-                                    let a2 = Math.atan2(p2.Y() - center.Y(), p2.X() - center.X());
-                                    if (a1 < 0) a1 += 2 * Math.PI;
-                                    if (a2 < 0) a2 += 2 * Math.PI;
-                                    let diff = a2 - a1; while(diff <= 0) diff += 2*Math.PI;
-                                    let mDiff = aMouse - a1; if (mDiff < 0) mDiff += 2*Math.PI;
-                                    if (mDiff > diff) isValid = false;
+                                if (mDiff <= diff + 0.05) { 
+                                    let t = Math.max(0, Math.min(1, mDiff / diff));
+                                    let distToArc = Math.abs(d - r);
+                                    if (distToArc < minDistObj) {
+                                        minDistObj = distToArc;
+                                        closestObj = el.arcObj ? el.arcObj : el;
+                                        let shortRatio = Math.min(t, 1 - t);
+                                        let bestFraction = null, snapT = t; 
+                                        const fractions = [{t: 1/2, label: '1/2'}, {t: 1/3, label: '1/3'}, {t: 2/3, label: '1/3'}, {t: 1/4, label: '1/4'}, {t: 3/4, label: '1/4'}, {t: 1/5, label: '1/5'}, {t: 4/5, label: '1/5'}, {t: 2/5, label: '2/5'}, {t: 3/5, label: '2/5'}];
+                                        let snapTolerance = 0.8 / (r * diff); 
+                                        for (let f of fractions) { if (Math.abs(t - f.t) < snapTolerance) { bestFraction = f; snapT = f.t; break; } }
+                                        let finalAngle = a1 + snapT * diff;
+                                        finalSnapX = center.X() + r * Math.cos(finalAngle);
+                                        finalSnapY = center.Y() + r * Math.sin(finalAngle);
+                                        finalSnapLabel = bestFraction ? ('弧 短/总 = ' + bestFraction.label) : ('弧 短/总 ≈ ' + shortRatio.toFixed(2));
+                                    }
                                 }
-                                
-                                if (isValid) {
-                                    minDistObj = Math.abs(d - r);
-                                    closestObj = el;
-                                    snapX = center.X() + r * Math.cos(aMouse);
-                                    snapY = center.Y() + r * Math.sin(aMouse);
-                                    snapLabelStr = el.isSector ? '扇形弧上' : '圆周上';
-                                }
+                            }
+                        }
+                    }
+                    else if (['circle', 'circumcircle'].includes(el.elType) && !el.isSectorPath) {
+                        let center = el.center;
+                        let r = typeof el.Radius === 'function' ? el.Radius() : 0;
+                        if (center && r > 0.01) {
+                            let d = Math.hypot(mouseX - center.X(), mouseY - center.Y());
+                            if (Math.abs(d - r) < minDistObj) {
+                                minDistObj = Math.abs(d - r);
+                                closestObj = el;
+                                let aMouse = Math.atan2(mouseY - center.Y(), mouseX - center.X());
+                                finalSnapX = center.X() + r * Math.cos(aMouse);
+                                finalSnapY = center.Y() + r * Math.sin(aMouse);
+                                finalSnapLabel = '圆周上';
                             }
                         }
                     }
@@ -1488,9 +1683,9 @@
                 if (closestObj) {
                     activeSnapSegment = closestObj; 
                     if (snapPreviewPoint) {
-                        snapPreviewPoint.moveTo([snapX, snapY]);
-                        snapPreviewPoint.name = snapLabelStr;
-                        if (snapPreviewPoint.label) snapPreviewPoint.label.setText(snapLabelStr);
+                        snapPreviewPoint.moveTo([finalSnapX, finalSnapY]);
+                        snapPreviewPoint.name = finalSnapLabel;
+                        if (snapPreviewPoint.label) snapPreviewPoint.label.setText(finalSnapLabel);
                         board.update(); 
                     }
                 } else {
@@ -1507,12 +1702,22 @@
             board.on('down', function(e) {
                 hasDraggedGraphic = false; 
                 
+                let els = board.getAllObjectsUnderMouse(e).filter(el => 
+                    el && 
+                    el.elType !== 'image' && 
+                    el !== shapePreviewObj && 
+                    el !== shapePreviewRadius && 
+                    el !== shapePreviewPoint && 
+                    !tempLines.includes(el)
+                );
+
                 if (e.button === 2) {
                     if (window.handleCancel && window.handleCancel()) return; 
                     
-                    let els = board.getAllObjectsUnderMouse(e).filter(el => el && el.elType !== 'image');
-                    let targetTypes = ['line', 'segment', 'circle', 'circumcircle', 'angle'];
-                    let target = els.find(el => el && (targetTypes.includes(el.elType) || el.isSector));
+                    // 优先捕捉明确的线段或者边框
+                    let target = els.find(el => ['line', 'segment', 'arc'].includes(el.elType)) || 
+                                 els.find(el => ['circle', 'circumcircle', 'angle'].includes(el.elType));
+                    
                     if (target && target.visProp && target.visProp.visible) {
                         let currentDash = target.visProp.dash || 0; target.setAttribute({dash: currentDash === 0 ? 2 : 0});
                         board.update(); triggerSave(); 
@@ -1521,12 +1726,10 @@
                 }
 
                 if (currentMode === 'pointer') {
-                    let els = board.getAllObjectsUnderMouse(e).filter(el => el && el.elType !== 'image');
-                    
                     let targetNode = e.target || e.srcElement; let textEl = null;
                     for (let i = 0; i < els.length; i++) {
                         let el = els[i]; 
-                        if (!el || !el.visProp) continue;
+                        if (!el.visProp) continue;
                         let cssStr = (el.visProp.cssclass || el.visProp.cssClass || '');
                         if (el.elType === 'text' && !cssStr.includes('static-text') && !cssStr.includes('snap-label')) {
                             if (el.rendNode && el.rendNode.contains(targetNode)) { textEl = el; break; }
@@ -1545,8 +1748,9 @@
                     }
 
                     // 准确捕获底层拖拽原点
-                    let sectorEl = els.find(el => el && el.isSector);
-                    let pointEl = els.find(el => el && ['point', 'glider'].includes(el.elType));
+                    let sectorEl = els.find(el => el.isSector || el.isSectorBorder);
+                    if (sectorEl && sectorEl.isSectorBorder) sectorEl = sectorEl.parentSector;
+                    let pointEl = els.find(el => ['point', 'glider'].includes(el.elType));
                     if (sectorEl && !pointEl) {
                         activeDraggedSector = sectorEl;
                         sectorDragStartUsr = board.getUsrCoordsOfMouse(e);
@@ -1570,34 +1774,33 @@
                 
                 let coords = board.getUsrCoordsOfMouse(e);
                 let actualClickCoords = [coords[0], coords[1]];
-                let els = board.getAllObjectsUnderMouse(e).filter(el => el && el.elType !== 'image');
 
                 let promptModal = document.getElementById('prompt-modal');
                 if (!promptModal.classList.contains('hidden')) {
-                    let targetSeg = els.find(el => el && ['segment', 'line'].includes(el.elType));
-                    if (targetSeg) {
-                        let insertStr = (targetSeg.point1 ? getPtName(targetSeg.point1) : '') + (targetSeg.point2 ? getPtName(targetSeg.point2) : '');
-                        if (insertStr) { document.getElementById('latex-input').value += insertStr; document.getElementById('latex-input').focus(); return; }
-                    }
-                    
                     let targetPt = els.find(el => el && ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint);
-                    
                     let potentialVertex = targetPt;
-                    let clickedSector = els.find(el => el && (el.elType === 'sector' || el.isSector));
-                    if (!potentialVertex && clickedSector && clickedSector.originalParents) {
-                        potentialVertex = clickedSector.originalParents[0];
-                    }
 
+                    // 1. 优先扫描鼠标周围的真实有效顶点 (将坐标单位精准缩放至舒适的30像素级探测半径)
                     if (!potentialVertex) {
                         let bestDist = Infinity;
+                        let maxD = 30 / board.unitX; 
                         for(let id in board.objects) {
                             let el = board.objects[id];
                             if (el && ['point', 'glider'].includes(el.elType) && el.visProp && el.visProp.visible && el !== snapPreviewPoint && el !== shapePreviewPoint) {
                                 let d = Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]);
-                                if (d < bestDist && d < 8.0) { 
+                                if (d < bestDist && d < maxD) { 
                                     bestDist = d; potentialVertex = el; 
                                 }
                             }
+                        }
+                    }
+
+                    // 2. 只有当点击在完全空白的面上时，才后置回退到扇形中心进行兜底
+                    if (!potentialVertex) {
+                        let clickedSector = els.find(el => el && (el.elType === 'sector' || el.isSector || el.isSectorBorder));
+                        if (clickedSector && clickedSector.isSectorBorder) clickedSector = clickedSector.parentSector;
+                        if (clickedSector && clickedSector.originalParents) {
+                            potentialVertex = clickedSector.originalParents[0];
                         }
                     }
                     
@@ -1610,6 +1813,14 @@
                         }
                     }
 
+                    // 如果点击线段插入字母
+                    let targetSeg = els.find(el => el && ['segment', 'line'].includes(el.elType) && !el.isSectorBorder);
+                    if (!targetSeg) targetSeg = els.find(el => el.isSectorBorder);
+                    if (targetSeg && targetSeg.point1 && targetSeg.point2) {
+                        let insertStr = (targetSeg.point1 ? getPtName(targetSeg.point1) : '') + (targetSeg.point2 ? getPtName(targetSeg.point2) : '');
+                        if (insertStr) { document.getElementById('latex-input').value += insertStr; document.getElementById('latex-input').focus(); return; }
+                    }
+
                     if (targetPt) {
                         document.getElementById('latex-input').value += getPtName(targetPt); document.getElementById('latex-input').focus(); return;
                     }
@@ -1620,20 +1831,26 @@
 
                 if (currentMode === 'markAngle') {
                     let v = els.find(el => el && ['point', 'glider'].includes(el.elType) && el !== snapPreviewPoint && el !== shapePreviewPoint);
-                    let clickedSector = els.find(el => el && (el.elType === 'sector' || el.isSector));
-                    
-                    if (!v && clickedSector && clickedSector.originalParents) {
-                        v = clickedSector.originalParents[0];
-                    }
 
+                    // 1. 优先扫描真实有效顶点
                     if (!v) {
                         let bestDist = Infinity;
+                        let maxD = 30 / board.unitX;
                         for(let id in board.objects) {
                             let el = board.objects[id];
                             if (el && ['point', 'glider'].includes(el.elType) && el.visProp && el.visProp.visible && el !== snapPreviewPoint && el !== shapePreviewPoint) {
                                 let d = Math.hypot(el.X() - actualClickCoords[0], el.Y() - actualClickCoords[1]);
-                                if (d < bestDist && d < 8.0) { bestDist = d; v = el; }
+                                if (d < bestDist && d < maxD) { bestDist = d; v = el; }
                             }
+                        }
+                    }
+                    
+                    // 2. 找不到点再兜底中心点
+                    if (!v) {
+                        let clickedSector = els.find(el => el && (el.elType === 'sector' || el.isSector || el.isSectorBorder));
+                        if (clickedSector && clickedSector.isSectorBorder) clickedSector = clickedSector.parentSector;
+                        if (clickedSector && clickedSector.originalParents) {
+                            v = clickedSector.originalParents[0];
                         }
                     }
                     
@@ -1651,14 +1868,18 @@
                     if (els.length > 0) {
                         let selectedColor = document.getElementById('color-picker').value;
                         
-                        let target = els.find(el => el && ['segment', 'line'].includes(el.elType)) || 
+                        let target = els.find(el => el && ['segment', 'line', 'arc'].includes(el.elType)) || 
                                      els.find(el => el && (['circle', 'circumcircle'].includes(el.elType) || el.isSector)) || 
                                      els.find(el => el && el.elType === 'angle');
                         
                         if (target) {
-                            target.setAttribute({strokeColor: selectedColor});
-                            if (target.hasPoint || ['angle', 'circle', 'circumcircle'].includes(target.elType) || target.isSector) {
+                            if (target.elType === 'sector' || target.isSector) {
                                 target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
+                            } else {
+                                target.setAttribute({strokeColor: selectedColor});
+                                if (target.hasPoint || ['angle', 'circle', 'circumcircle'].includes(target.elType)) {
+                                    target.setAttribute({fillColor: selectedColor, fillOpacity: 0.3});
+                                }
                             }
                             board.update(); triggerSave(); return;
                         }
@@ -1684,9 +1905,9 @@
                 }
                 else if (currentMode === 'eraser') {
                     if (els.length > 0) {
-                        const targetTypes = ['point', 'glider', 'line', 'segment', 'circle', 'circumcircle', 'polygon', 'angle', 'text', 'midpoint'];
-                        let validTargets = els.filter(el => el && 
-                            (targetTypes.includes(el.elType) || el.isSector) && 
+                        const targetTypes = ['point', 'glider', 'line', 'segment', 'circle', 'circumcircle', 'polygon', 'angle', 'text', 'midpoint', 'arc'];
+                        let validTargets = els.filter(el => 
+                            (targetTypes.includes(el.elType) || el.isSector || el.isSectorBorder) && 
                             el !== snapPreviewPoint && 
                             el !== shapePreviewPoint && 
                             el.visProp && el.visProp.visible && 
@@ -1703,7 +1924,7 @@
                                 else if (el.elType === 'polygon') desc = '多边形';
                                 else if (el.elType === 'angle') desc = '角 ' + (el.customLabel || '');
                                 else if (['circle', 'circumcircle'].includes(el.elType)) desc = '圆';
-                                else if (el.isSector) desc = '扇形/弧';
+                                else if (el.isSector || el.elType === 'arc') desc = '扇形/弧';
                                 else if (el.elType === 'text') desc = '文本/公式';
                                 return { id: el.id, desc: desc, obj: el };
                             });
@@ -1723,7 +1944,7 @@
                         
                         // 防御性补网：如果吸附没触发但是点击了曲线实体
                         if (!currentSlideObj) {
-                            currentSlideObj = els.find(el => el && (['line', 'segment', 'circle', 'circumcircle'].includes(el.elType) || el.isSector) && !el.isSectorPath);
+                            currentSlideObj = els.find(el => (['line', 'segment', 'circle', 'circumcircle', 'arc'].includes(el.elType) || el.isSector || el.isSectorBorder) && !el.isSectorPath);
                         }
                         
                         openGenericModal("命名控制点", "请输入点的字母", String.fromCharCode(pointCharCode), function(val) {
@@ -1733,7 +1954,11 @@
                             // 强行转性为滑动绑定点 (Glider)
                             if (currentSlideObj) { 
                                 let slideTarget = currentSlideObj;
-                                if (currentSlideObj.isSector && currentSlideObj.arc) slideTarget = currentSlideObj.arc;
+                                if (currentSlideObj.isSectorBorder) {
+                                    slideTarget = currentSlideObj; // 完美落点在独立边框对象上
+                                } else if (currentSlideObj.isSector && currentSlideObj.arcObj) {
+                                    slideTarget = currentSlideObj.arcObj; // 历史降级处理
+                                }
                                 board.create('glider', [finalCoords[0], finalCoords[1], slideTarget], props);
                             } else {
                                 board.create('point', finalCoords, props);
@@ -1749,6 +1974,12 @@
                         });
                     }
                 } 
+                else if (currentMode === 'text') {
+                    pendingTextCoords = actualClickCoords;
+                    document.getElementById('prompt-modal').classList.remove('hidden');
+                    let inputField = document.getElementById('latex-input'); inputField.value = ''; 
+                    setTimeout(() => { inputField.focus(); }, 50); 
+                }
                 else {
                     let p;
                     let isPointUnderMouse = false, clickedPoint = null;
@@ -1762,6 +1993,11 @@
                         let center = clickPoints[0];
                         let p1 = clickPoints[1];
                         
+                        if (!center || !p1 || !center.coords || !p1.coords) {
+                            window.handleCancel();
+                            return;
+                        }
+
                         let targetX = actualClickCoords[0];
                         let targetY = actualClickCoords[1];
                         if (isPointUnderMouse && clickedPoint !== center && clickedPoint !== p1) {
@@ -1792,9 +2028,20 @@
                         if (shapePreviewRadius) { board.removeObject(shapePreviewRadius); shapePreviewRadius = null; }
                         tempLines.forEach(l => board.removeObject(l)); tempLines = [];
                         
-                        let sec = board.create('sector', [center, p1, p], { strokeWidth: 2, strokeColor: selectedColor, fillColor: 'none', fillOpacity: 0, highlight: false, hasInnerPoints: true });
+                        let sec = board.create('sector', [center, p1, p], { strokeWidth: 0, fillColor: 'none', fillOpacity: 0, highlight: false, hasInnerPoints: true });
                         sec.isSector = true; 
                         sec.originalParents = [center, p1, p];
+                        
+                        let arc = board.create('arc', [center, p1, p], { strokeWidth: 2, strokeColor: selectedColor });
+                        arc.isSectorBorder = true; arc.parentSector = sec;
+                        
+                        let r1 = board.create('segment', [center, p1], { strokeWidth: 2, strokeColor: selectedColor });
+                        r1.isSectorBorder = true; r1.parentSector = sec;
+                        
+                        let r2 = board.create('segment', [center, p], { strokeWidth: 2, strokeColor: selectedColor });
+                        r2.isSectorBorder = true; r2.parentSector = sec;
+
+                        sec.arcObj = arc; sec.r1Obj = r1; sec.r2Obj = r2;
                         
                         clickPoints = []; tempNewPoints = []; triggerSave();
                         return; 
@@ -1818,13 +2065,13 @@
                         
                         let currentSlideObj = activeSnapSegment;
                         if (!currentSlideObj) {
-                            currentSlideObj = els.find(el => el && (['line', 'segment', 'circle', 'circumcircle'].includes(el.elType) || el.isSector) && !el.isSectorPath);
+                            currentSlideObj = els.find(el => (['line', 'segment', 'circle', 'circumcircle', 'arc'].includes(el.elType) || el.isSector || el.isSectorBorder) && !el.isSectorPath);
                         }
 
-                        // 强行绑定任意工具落点到轨道
                         if (currentSlideObj) { 
                             let slideTarget = currentSlideObj;
-                            if (currentSlideObj.isSector && currentSlideObj.arc) slideTarget = currentSlideObj.arc;
+                            if (currentSlideObj.isSectorBorder) slideTarget = currentSlideObj;
+                            else if (currentSlideObj.isSector && currentSlideObj.arcObj) slideTarget = currentSlideObj.arcObj;
                             p = board.create('glider', [finalCoords[0], finalCoords[1], slideTarget], props); 
                         } 
                         else { p = board.create('point', finalCoords, props); }
@@ -1857,18 +2104,21 @@
                     }
 
                     if (currentMode === 'line' && clickPoints.length === 2) {
+                        if (!clickPoints[0] || !clickPoints[1] || !clickPoints[0].coords || !clickPoints[1].coords) { window.handleCancel(); return; }
                         let selectedColor = document.getElementById('color-picker').value;
                         if (shapePreviewObj) { board.removeObject(shapePreviewObj); board.removeObject(shapePreviewPoint); shapePreviewObj = null; shapePreviewPoint = null; }
                         board.create('segment', [clickPoints[0], clickPoints[1]], { strokeWidth: 2, strokeColor: selectedColor });
                         clickPoints = []; tempNewPoints = []; triggerSave(); 
                     }
                     else if (currentMode === 'circle' && clickPoints.length === 2) {
+                        if (!clickPoints[0] || !clickPoints[1] || !clickPoints[0].coords || !clickPoints[1].coords) { window.handleCancel(); return; }
                         let selectedColor = document.getElementById('color-picker').value;
                         if (shapePreviewObj) { board.removeObject(shapePreviewObj); board.removeObject(shapePreviewPoint); board.removeObject(shapePreviewRadius); shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null; }
                         board.create('circle', [clickPoints[0], clickPoints[1]], { strokeWidth: 2, strokeColor: selectedColor, fillColor: 'none', fillOpacity: 0, highlight: false, hasInnerPoints: true });
                         clickPoints = []; tempNewPoints = []; triggerSave(); 
                     }
                     else if (currentMode === 'circle3p' && clickPoints.length === 3) {
+                        if (!clickPoints[0] || !clickPoints[1] || !clickPoints[2] || !clickPoints[0].coords || !clickPoints[1].coords || !clickPoints[2].coords) { window.handleCancel(); return; }
                         let selectedColor = document.getElementById('color-picker').value;
                         if (shapePreviewObj) { board.removeObject(shapePreviewObj); board.removeObject(shapePreviewPoint); board.removeObject(shapePreviewRadius); shapePreviewObj = null; shapePreviewPoint = null; shapePreviewRadius = null; }
                         tempLines.forEach(l => board.removeObject(l)); tempLines = [];
