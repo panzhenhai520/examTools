@@ -1411,10 +1411,14 @@
                     return; 
                 }
 
-                let closestSegment = null, minDistLine = 0.8, bestT = -1;
+                // ================= 【完美全域曲线吸附雷达】 =================
+                let closestObj = null, minDistObj = 0.8, snapX = mouseX, snapY = mouseY, snapLabelStr = '';
                 for (let id in board.objects) {
                     let el = board.objects[id];
-                    if (el && ['line', 'segment'].includes(el.elType) && el.point1 && el.point2) {
+                    if (!el || !el.visProp || el.visProp.visible === false) continue;
+
+                    // 1. 直线与线段的吸附判定
+                    if (['line', 'segment'].includes(el.elType) && el.point1 && el.point2) {
                         let p1 = el.point1, p2 = el.point2;
                         let dx = p2.X() - p1.X(), dy = p2.Y() - p1.Y();
                         let l2 = dx*dx + dy*dy;
@@ -1423,32 +1427,75 @@
                             if (t >= 0.02 && t <= 0.98) {
                                 let projX = p1.X() + t * dx, projY = p1.Y() + t * dy;
                                 let dist = Math.hypot(mouseX - projX, mouseY - projY);
-                                if (dist < minDistLine) { minDistLine = dist; closestSegment = el; bestT = t; }
+                                if (dist < minDistObj) { 
+                                    minDistObj = dist; 
+                                    closestObj = el; 
+                                    
+                                    let shortRatio = Math.min(t, 1 - t);
+                                    let bestFraction = null, snapT = t; 
+                                    const fractions = [{t: 1/2, label: '1/2'}, {t: 1/3, label: '1/3'}, {t: 2/3, label: '1/3'}, {t: 1/4, label: '1/4'}, {t: 3/4, label: '1/4'}, {t: 1/5, label: '1/5'}, {t: 4/5, label: '1/5'}, {t: 2/5, label: '2/5'}, {t: 3/5, label: '2/5'}];
+                                    let snapTolerance = 0.8 / Math.hypot(dx, dy); 
+                                    for (let f of fractions) { if (Math.abs(t - f.t) < snapTolerance) { bestFraction = f; snapT = f.t; break; } }
+                                    
+                                    snapLabelStr = bestFraction ? ('短/总 = ' + bestFraction.label) : ('短/总 ≈ ' + shortRatio.toFixed(2));
+                                    snapX = p1.X() + snapT * dx;
+                                    snapY = p1.Y() + snapT * dy;
+                                }
+                            }
+                        }
+                    } 
+                    // 2. 圆周与扇形弧的吸附判定
+                    else if ((['circle', 'circumcircle'].includes(el.elType) && !el.isSectorPath) || el.isSector) {
+                        let center, r;
+                        if (el.isSector && el.originalParents) {
+                            center = el.originalParents[0];
+                            r = Math.hypot(el.originalParents[1].X() - center.X(), el.originalParents[1].Y() - center.Y());
+                        } else if (el.center && typeof el.Radius === 'function') {
+                            center = el.center;
+                            r = el.Radius();
+                        }
+                        
+                        if (center && r > 0.01) {
+                            let d = Math.hypot(mouseX - center.X(), mouseY - center.Y());
+                            if (Math.abs(d - r) < minDistObj) {
+                                let aMouse = Math.atan2(mouseY - center.Y(), mouseX - center.X());
+                                let isValid = true;
+                                
+                                // 如果是扇形，必须确保鼠标在夹角区间之内
+                                if (el.isSector && el.originalParents) {
+                                    let p1 = el.originalParents[1], p2 = el.originalParents[2];
+                                    let a1 = Math.atan2(p1.Y() - center.Y(), p1.X() - center.X());
+                                    let a2 = Math.atan2(p2.Y() - center.Y(), p2.X() - center.X());
+                                    if (a1 < 0) a1 += 2 * Math.PI;
+                                    if (a2 < 0) a2 += 2 * Math.PI;
+                                    let diff = a2 - a1; while(diff <= 0) diff += 2*Math.PI;
+                                    let mDiff = aMouse - a1; if (mDiff < 0) mDiff += 2*Math.PI;
+                                    if (mDiff > diff) isValid = false;
+                                }
+                                
+                                if (isValid) {
+                                    minDistObj = Math.abs(d - r);
+                                    closestObj = el;
+                                    snapX = center.X() + r * Math.cos(aMouse);
+                                    snapY = center.Y() + r * Math.sin(aMouse);
+                                    snapLabelStr = el.isSector ? '扇形弧上' : '圆周上';
+                                }
                             }
                         }
                     }
                 }
 
-                if (closestSegment) {
-                    activeSnapSegment = closestSegment; 
-                    let p1 = closestSegment.point1, p2 = closestSegment.point2;
-                    let shortRatio = Math.min(bestT, 1 - bestT);
-                    let bestFraction = null, snapT = bestT; 
-                    const fractions = [{t: 1/2, label: '1/2'}, {t: 1/3, label: '1/3'}, {t: 2/3, label: '1/3'}, {t: 1/4, label: '1/4'}, {t: 3/4, label: '1/4'}, {t: 1/5, label: '1/5'}, {t: 4/5, label: '1/5'}, {t: 2/5, label: '2/5'}, {t: 3/5, label: '2/5'}];
-                    let snapTolerance = 0.8 / Math.hypot(p2.X() - p1.X(), p2.Y() - p1.Y()); 
-                    for (let f of fractions) { if (Math.abs(bestT - f.t) < snapTolerance) { bestFraction = f; snapT = f.t; break; } }
-                    
-                    let displayLabel = bestFraction ? ('短/总 = ' + bestFraction.label) : ('短/总 ≈ ' + shortRatio.toFixed(2));
-                    let snapX = p1.X() + snapT * (p2.X() - p1.X()), snapY = p1.Y() + snapT * (p2.Y() - p1.Y());
+                if (closestObj) {
+                    activeSnapSegment = closestObj; 
                     if (snapPreviewPoint) {
                         snapPreviewPoint.moveTo([snapX, snapY]);
-                        snapPreviewPoint.name = displayLabel;
-                        if (snapPreviewPoint.label) snapPreviewPoint.label.setText(displayLabel);
+                        snapPreviewPoint.name = snapLabelStr;
+                        if (snapPreviewPoint.label) snapPreviewPoint.label.setText(snapLabelStr);
                         board.update(); 
                     }
                 } else {
                     activeSnapSegment = null;
-                    if (snapPreviewPoint) { 
+                    if (snapPreviewPoint && snapPreviewPoint.X() !== 9999) { 
                         snapPreviewPoint.moveTo([9999, 9999]); 
                         snapPreviewPoint.name = '吸附';
                         if (snapPreviewPoint.label) snapPreviewPoint.label.setText('吸附');
@@ -1674,12 +1721,20 @@
                         let finalCoords = (snapPreviewPoint && snapPreviewPoint.X() !== 9999) ? [snapPreviewPoint.X(), snapPreviewPoint.Y()] : actualClickCoords;
                         let currentSlideObj = activeSnapSegment; 
                         
+                        // 防御性补网：如果吸附没触发但是点击了曲线实体
+                        if (!currentSlideObj) {
+                            currentSlideObj = els.find(el => el && (['line', 'segment', 'circle', 'circumcircle'].includes(el.elType) || el.isSector) && !el.isSectorPath);
+                        }
+                        
                         openGenericModal("命名控制点", "请输入点的字母", String.fromCharCode(pointCharCode), function(val) {
                             let nameToUse = val.trim().toUpperCase(); updatePointCharCode(nameToUse);
                             let props = { size: 4, name: nameToUse, fillColor: '#ef4444', strokeColor: 'white', visible: isPointsVisible, withLabel: nameToUse !== '', label: { offset: [15, 15] } };
                             
+                            // 强行转性为滑动绑定点 (Glider)
                             if (currentSlideObj) { 
-                                board.create('glider', [finalCoords[0], finalCoords[1], currentSlideObj], props);
+                                let slideTarget = currentSlideObj;
+                                if (currentSlideObj.isSector && currentSlideObj.arc) slideTarget = currentSlideObj.arc;
+                                board.create('glider', [finalCoords[0], finalCoords[1], slideTarget], props);
                             } else {
                                 board.create('point', finalCoords, props);
                             }
@@ -1761,7 +1816,17 @@
                         let props = { size: 3, name: autoName, fillColor: '#3b82f6', visible: isPointsVisible, withLabel: true, label: { offset: [15, 15] } };
                         let finalCoords = (shapePreviewPoint && shapePreviewPoint.X() !== 9999) ? [shapePreviewPoint.X(), shapePreviewPoint.Y()] : actualClickCoords;
                         
-                        if (activeSnapSegment) { p = board.create('glider', [finalCoords[0], finalCoords[1], activeSnapSegment], props); } 
+                        let currentSlideObj = activeSnapSegment;
+                        if (!currentSlideObj) {
+                            currentSlideObj = els.find(el => el && (['line', 'segment', 'circle', 'circumcircle'].includes(el.elType) || el.isSector) && !el.isSectorPath);
+                        }
+
+                        // 强行绑定任意工具落点到轨道
+                        if (currentSlideObj) { 
+                            let slideTarget = currentSlideObj;
+                            if (currentSlideObj.isSector && currentSlideObj.arc) slideTarget = currentSlideObj.arc;
+                            p = board.create('glider', [finalCoords[0], finalCoords[1], slideTarget], props); 
+                        } 
                         else { p = board.create('point', finalCoords, props); }
                         
                         tempNewPoints.push(p);
